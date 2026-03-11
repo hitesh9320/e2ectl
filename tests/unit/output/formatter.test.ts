@@ -45,6 +45,30 @@ describe('formatter helpers', () => {
     expect(table).toContain('prod');
   });
 
+  it('keeps masked profile secrets compact even for very long tokens', () => {
+    const config: ConfigFile = {
+      profiles: {
+        prod: {
+          api_key: '1234567890abcdef',
+          auth_token: 'x'.repeat(2048) + 'hUpk',
+          project_id: '46429',
+          location: 'Delhi'
+        }
+      },
+      default: 'prod'
+    };
+
+    const summary = summarizeProfiles(config);
+    const table = formatProfilesTable(summary);
+
+    expect(summary[0]).toMatchObject({
+      api_key: '****cdef',
+      auth_token: '****hUpk'
+    });
+    expect(table).toContain('****hUpk');
+    expect(table).not.toContain('*'.repeat(100));
+  });
+
   it('renders stable node list and detail output', () => {
     const table = formatNodesTable([
       {

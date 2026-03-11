@@ -43,6 +43,7 @@ The manual live API suite is intentionally not part of CI.
 Update these when behavior changes:
 
 - [README.md](../README.md) for operator-facing usage
+- [docs/DEMO.md](./DEMO.md) for live walkthrough commands
 - [CONTRIBUTING.md](../CONTRIBUTING.md) for contributor workflow
 - [docs/ROADMAP.md](./ROADMAP.md) for milestone state
 - [docs/spec/v1](./spec/v1/) for milestone-level implementation notes

@@ -7,5 +7,5 @@ export function maskSecret(value: string): string {
     return '*'.repeat(value.length);
   }
 
-  return `${'*'.repeat(value.length - 4)}${value.slice(-4)}`;
+  return `****${value.slice(-4)}`;
 }

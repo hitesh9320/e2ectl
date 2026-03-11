@@ -83,8 +83,8 @@ describe('config commands', () => {
     expect(validator.calls).toHaveLength(1);
     expect(stdout.buffer).toContain('"action": "saved"');
     expect(stdout.buffer).toContain('"alias": "prod"');
-    expect(stdout.buffer).toContain('"api_key": "******3456"');
-    expect(stdout.buffer).toContain('"auth_token": "*******4321"');
+    expect(stdout.buffer).toContain('"api_key": "****3456"');
+    expect(stdout.buffer).toContain('"auth_token": "****4321"');
   });
 
   it('lists profiles with masked table output', async () => {
@@ -101,8 +101,8 @@ describe('config commands', () => {
     await program.parseAsync(['node', 'e2ectl', 'config', 'list']);
 
     expect(stdout.buffer).toContain('prod');
-    expect(stdout.buffer).toContain('******3456');
-    expect(stdout.buffer).toContain('*******4321');
+    expect(stdout.buffer).toContain('****3456');
+    expect(stdout.buffer).toContain('****4321');
   });
 
   it('sets the default alias', async () => {

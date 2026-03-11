@@ -31,6 +31,16 @@ make build
 node dist/index.js --help
 ```
 
+To install the CLI command locally:
+
+```bash
+make build
+npm link
+e2ectl --help
+```
+
+For a copy-paste demo walkthrough, use [docs/DEMO.md](./docs/DEMO.md).
+
 ## Configuration And Auth
 
 Profiles are stored in `~/.e2e/config.json`:
@@ -74,6 +84,15 @@ e2ectl config add \
 ```
 
 Credentials are validated before the profile is saved.
+
+Set a saved profile as the default alias:
+
+```bash
+e2ectl config set-default --alias prod
+e2ectl config list
+```
+
+After that, `node` commands can omit `--alias`.
 
 ## Command Surface
 
@@ -123,11 +142,13 @@ e2ectl node create \
   --image <exact-image-from-catalog>
 ```
 
+For a reviewer-ready, step-by-step version including setup and verification, see [docs/DEMO.md](./docs/DEMO.md).
+
 ## Output And Safety
 
 - Human-readable output is the default.
 - `--json` emits deterministic JSON for agents and scripts.
-- `config list` masks stored secrets.
+- `config list` masks stored secrets in compact form such as `****e39d`.
 - `node delete` prompts for confirmation unless `--force` is supplied.
 - MyAccount API requests use bearer auth plus required query parameters on every call.
 
