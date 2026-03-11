@@ -1,16 +1,9 @@
 import { createProgram } from '../../../src/cli.js';
 import type { MyAccountClient } from '../../../src/client/api.js';
 import { ConfigStore } from '../../../src/config/store.js';
-import type { CliRuntime, OutputWriter } from '../../../src/runtime.js';
+import type { CliRuntime } from '../../../src/runtime.js';
 import type { NodeCreateRequest } from '../../../src/types/node.js';
-
-class MemoryWriter implements OutputWriter {
-  buffer = '';
-
-  write(chunk: string): void {
-    this.buffer += chunk;
-  }
-}
+import { createTestConfigPath, MemoryWriter } from '../../helpers/runtime.js';
 
 function createNodeClientStub() {
   const listNodes = vi.fn(() =>
@@ -116,7 +109,7 @@ describe('node commands', () => {
     stdout: MemoryWriter;
     stub: ReturnType<typeof createNodeClientStub>;
   } {
-    const configPath = `${process.cwd()}/.tmp/node-test-${Date.now()}-${Math.random().toString(16).slice(2)}.json`;
+    const configPath = createTestConfigPath('node-test');
     const store = new ConfigStore({ configPath });
     const stdout = new MemoryWriter();
     const stub = createNodeClientStub();
@@ -301,5 +294,23 @@ describe('node commands', () => {
     expect(confirm).not.toHaveBeenCalled();
     expect(stub.deleteNode).toHaveBeenCalledWith('101');
     expect(stdout.buffer).toContain('"cancelled": false');
+  });
+
+  it('rejects non-numeric node identifiers', async () => {
+    const { runtime } = createRuntimeFixture();
+    await seedProfile(runtime);
+    const program = createProgram(runtime);
+
+    await expect(
+      program.parseAsync([
+        'node',
+        'e2ectl',
+        'node',
+        'get',
+        'node-abc',
+        '--alias',
+        'prod'
+      ])
+    ).rejects.toThrow(/Node ID must be numeric/i);
   });
 });

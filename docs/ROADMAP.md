@@ -64,7 +64,7 @@ Acceptance criteria:
 
 ## M6 — Test Suite
 
-**Status:** PENDING
+**Status:** DONE
 
 Acceptance criteria:
 

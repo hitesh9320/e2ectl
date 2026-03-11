@@ -12,6 +12,7 @@ This repository currently implements:
 - M3 config commands: `config add`, `list`, `set-default`, and `remove`
 - M4 node read commands: `node list` and `node get`
 - M5 node write commands: `node create` with prototype defaults and `node delete` with confirmation safety
+- M6 test suite: expanded unit coverage, shared test helpers, and a manual read-only API test lane kept out of CI
 
 Planned next milestones are tracked in [docs/ROADMAP.md](./docs/ROADMAP.md).
 
@@ -69,6 +70,7 @@ npm install
 make lint
 make test
 make build
+npm run test:manual
 ```
 
 Run the CLI locally:
@@ -82,7 +84,16 @@ npm run dev -- --help
 - `make lint`: Prettier check, ESLint, and TypeScript typecheck
 - `make test`: unit tests only, using Vitest with mocked filesystem and mocked network boundaries
 - `make build`: production TypeScript compile into `dist/`
-- Manual e2e/API tests are planned later and are not part of CI yet
+- `npm run test:manual`: manual read-only API checks, skipped unless `E2ECTL_RUN_MANUAL_E2E=1`
+
+Manual read-only test inputs:
+
+- `E2ECTL_RUN_MANUAL_E2E=1`
+- `E2E_API_KEY`
+- `E2E_AUTH_TOKEN`
+- `E2E_PROJECT_ID`
+- `E2E_LOCATION`
+- Optional: `E2ECTL_MANUAL_NODE_ID` to exercise `node get`
 
 ## CI Behavior
 

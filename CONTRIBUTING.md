@@ -12,6 +12,7 @@ npm install
 make lint
 make test
 make build
+npm run test:manual
 ```
 
 ## Verification Contract
@@ -19,6 +20,7 @@ make build
 - `make lint` runs formatting checks, ESLint, and `tsc --noEmit`
 - `make test` runs unit tests only
 - `make build` verifies the distributable compile
+- `npm run test:manual` runs the read-only manual API checks and stays skipped unless `E2ECTL_RUN_MANUAL_E2E=1`
 
 ## CI Triggers
 

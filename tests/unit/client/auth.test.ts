@@ -77,4 +77,36 @@ describe('resolveCredentials', () => {
       })
     ).toThrowError(/Unable to resolve MyAccount credentials/);
   });
+
+  it('throws when the requested alias does not exist', () => {
+    expect(() =>
+      resolveCredentials({
+        alias: 'missing',
+        config,
+        configPath: '/tmp/config.json',
+        env: {}
+      })
+    ).toThrowError(/Profile "missing" was not found/);
+  });
+
+  it('prefers environment credentials over the saved default profile', () => {
+    const result = resolveCredentials({
+      config,
+      env: {
+        E2E_API_KEY: 'api-env',
+        E2E_AUTH_TOKEN: 'auth-env',
+        E2E_PROJECT_ID: '456',
+        E2E_LOCATION: 'Chennai'
+      }
+    });
+
+    expect(result).toEqual({
+      alias: 'prod',
+      api_key: 'api-env',
+      auth_token: 'auth-env',
+      project_id: '456',
+      location: 'Chennai',
+      source: 'mixed'
+    });
+  });
 });

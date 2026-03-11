@@ -18,8 +18,9 @@
     "dev": "node --import tsx ./src/index.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint src tests vitest.config.ts",
+    "lint": "eslint src tests vitest.config.ts vitest.manual.config.ts",
     "test": "vitest run",
+    "test:manual": "vitest run --config vitest.manual.config.ts",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

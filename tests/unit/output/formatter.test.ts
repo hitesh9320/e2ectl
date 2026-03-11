@@ -1,5 +1,8 @@
 import {
   formatJson,
+  formatNodeCreateResult,
+  formatNodeDetails,
+  formatNodesTable,
   formatProfilesTable,
   summarizeProfiles
 } from '../../../src/output/formatter.js';
@@ -37,5 +40,51 @@ describe('formatter helpers', () => {
     });
     expect(table).toContain('****5678');
     expect(table).toContain('prod');
+  });
+
+  it('renders stable node list and detail output', () => {
+    const table = formatNodesTable([
+      {
+        id: 101,
+        name: 'node-a',
+        status: 'Running',
+        plan: 'C3.8GB',
+        public_ip_address: '1.1.1.1',
+        private_ip_address: '10.0.0.1'
+      }
+    ]);
+    const details = formatNodeDetails({
+      id: 101,
+      name: 'node-a',
+      status: 'Running',
+      plan: 'C3.8GB',
+      public_ip_address: '1.1.1.1',
+      private_ip_address: '10.0.0.1',
+      location: 'Delhi'
+    });
+
+    expect(table).toContain('node-a');
+    expect(table).toContain('C3.8GB');
+    expect(details).toContain('ID: 101');
+    expect(details).toContain('Location: Delhi');
+  });
+
+  it('renders create summaries with counts and created nodes', () => {
+    const output = formatNodeCreateResult({
+      node_create_response: [
+        {
+          id: 205,
+          name: 'node-b',
+          plan: 'C3.8GB',
+          status: 'Creating'
+        }
+      ],
+      total_number_of_node_created: 1,
+      total_number_of_node_requested: 1
+    });
+
+    expect(output).toContain('Requested: 1');
+    expect(output).toContain('Created: 1');
+    expect(output).toContain('node-b');
   });
 });

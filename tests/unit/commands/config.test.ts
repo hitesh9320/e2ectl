@@ -5,19 +5,12 @@ import {
   type CredentialValidationResult
 } from '../../../src/client/credential-validator.js';
 import { ConfigStore } from '../../../src/config/store.js';
-import type { CliRuntime, OutputWriter } from '../../../src/runtime.js';
+import type { CliRuntime } from '../../../src/runtime.js';
 import type {
   ProfileConfig,
   ResolvedCredentials
 } from '../../../src/types/config.js';
-
-class MemoryWriter implements OutputWriter {
-  buffer = '';
-
-  write(chunk: string): void {
-    this.buffer += chunk;
-  }
-}
+import { createTestConfigPath, MemoryWriter } from '../../helpers/runtime.js';
 
 class StubCredentialValidator extends ApiCredentialValidator {
   readonly calls: ProfileConfig[] = [];
@@ -43,7 +36,7 @@ describe('config commands', () => {
     validator: StubCredentialValidator;
     store: ConfigStore;
   } {
-    const configPath = `${process.cwd()}/.tmp/config-test-${Date.now()}-${Math.random().toString(16).slice(2)}.json`;
+    const configPath = createTestConfigPath('config-test');
     const stdout = new MemoryWriter();
     const validator = new StubCredentialValidator();
     const store = new ConfigStore({ configPath });
@@ -164,5 +157,30 @@ describe('config commands', () => {
     ]);
 
     expect(stdout.buffer).toContain('"profiles": []');
+  });
+
+  it('rejects unsupported locations before validation', async () => {
+    const { runtime, validator } = createRuntimeFixture();
+    const program = createProgram(runtime);
+
+    await expect(
+      program.parseAsync([
+        'node',
+        'e2ectl',
+        'config',
+        'add',
+        '--alias',
+        'prod',
+        '--api-key',
+        'api-123456',
+        '--auth-token',
+        'auth-654321',
+        '--project-id',
+        '12345',
+        '--location',
+        'Noida'
+      ])
+    ).rejects.toThrow(/Unsupported location/i);
+    expect(validator.calls).toHaveLength(0);
   });
 });
