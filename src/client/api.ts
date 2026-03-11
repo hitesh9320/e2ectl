@@ -1,6 +1,12 @@
 import type { ApiEnvelope, ApiRequestOptions } from '../types/api.js';
 import type { ResolvedCredentials } from '../types/config.js';
-import type { NodeDetails, NodeListEnvelope } from '../types/node.js';
+import type {
+  NodeCreateRequest,
+  NodeCreateResult,
+  NodeDeleteResult,
+  NodeDetails,
+  NodeListEnvelope
+} from '../types/node.js';
 import { CliError, EXIT_CODES } from '../utils/errors.js';
 
 const DEFAULT_BASE_URL = 'https://api.e2enetworks.com/myaccount/api/v1';
@@ -23,10 +29,12 @@ export interface ApiClientOptions {
 }
 
 export interface MyAccountClient {
+  createNode(body: NodeCreateRequest): Promise<ApiEnvelope<NodeCreateResult>>;
   delete<TData>(
     path: string,
     options?: Omit<ApiRequestOptions, 'method' | 'path'>
   ): Promise<ApiEnvelope<TData>>;
+  deleteNode(nodeId: string): Promise<ApiEnvelope<NodeDeleteResult>>;
   get<TData>(
     path: string,
     options?: Omit<ApiRequestOptions, 'method' | 'path'>
@@ -88,6 +96,18 @@ export class MyAccountApiClient implements MyAccountClient {
       method: 'DELETE',
       path
     });
+  }
+
+  async createNode(
+    body: NodeCreateRequest
+  ): Promise<ApiEnvelope<NodeCreateResult>> {
+    return this.post<NodeCreateResult>('/nodes/', {
+      body
+    });
+  }
+
+  async deleteNode(nodeId: string): Promise<ApiEnvelope<NodeDeleteResult>> {
+    return this.delete<NodeDeleteResult>(`/nodes/${nodeId}/`);
   }
 
   async validateCredentials(): Promise<ApiEnvelope<unknown>> {

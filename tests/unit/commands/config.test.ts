@@ -50,9 +50,11 @@ describe('config commands', () => {
 
     return {
       runtime: {
+        confirm: vi.fn(() => Promise.resolve(true)),
         createApiClient: (credentials: ResolvedCredentials) =>
           new MyAccountApiClient(credentials),
         credentialValidator: validator,
+        isInteractive: true,
         stderr: new MemoryWriter(),
         stdout,
         store

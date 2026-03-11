@@ -1,7 +1,11 @@
 import Table from 'cli-table3';
 
 import type { ConfigFile, ProfileSummary } from '../types/config.js';
-import type { NodeDetails, NodeSummary } from '../types/node.js';
+import type {
+  NodeCreateResult,
+  NodeDetails,
+  NodeSummary
+} from '../types/node.js';
 import { stableStringify, type JsonValue } from '../utils/json.js';
 import { maskSecret } from '../utils/mask.js';
 
@@ -83,4 +87,17 @@ export function formatNodeDetails(node: NodeDetails): string {
   ];
 
   return rows.map(([label, value]) => `${label}: ${value}`).join('\n');
+}
+
+export function formatNodeCreateResult(result: NodeCreateResult): string {
+  const lines = [
+    `Requested: ${result.total_number_of_node_requested}`,
+    `Created: ${result.total_number_of_node_created}`
+  ];
+
+  if (result.node_create_response.length > 0) {
+    lines.push('', formatNodesTable(result.node_create_response));
+  }
+
+  return lines.join('\n');
 }

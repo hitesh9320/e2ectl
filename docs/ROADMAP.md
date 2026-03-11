@@ -54,7 +54,7 @@ Acceptance criteria:
 
 ## M5 — Node Write Commands
 
-**Status:** PENDING
+**Status:** DONE
 
 Acceptance criteria:
 

@@ -1,3 +1,5 @@
+import { createInterface } from 'node:readline/promises';
+
 import { MyAccountApiClient, type MyAccountClient } from './client/api.js';
 import {
   ApiCredentialValidator,
@@ -11,8 +13,10 @@ export interface OutputWriter {
 }
 
 export interface CliRuntime {
+  confirm(message: string): Promise<boolean>;
   createApiClient(credentials: ResolvedCredentials): MyAccountClient;
   credentialValidator: CredentialValidator;
+  isInteractive: boolean;
   stderr: OutputWriter;
   stdout: OutputWriter;
   store: ConfigStore;
@@ -20,10 +24,27 @@ export interface CliRuntime {
 
 export function createRuntime(): CliRuntime {
   return {
+    confirm: promptForConfirmation,
     createApiClient: (credentials) => new MyAccountApiClient(credentials),
     credentialValidator: new ApiCredentialValidator(),
+    isInteractive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
     stderr: process.stderr,
     stdout: process.stdout,
     store: new ConfigStore()
   };
+}
+
+async function promptForConfirmation(message: string): Promise<boolean> {
+  const prompt = `${message} [y/N] `;
+  const readline = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    const answer = await readline.question(prompt);
+    return /^(y|yes)$/i.test(answer.trim());
+  } finally {
+    readline.close();
+  }
 }

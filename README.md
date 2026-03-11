@@ -11,6 +11,7 @@ This repository currently implements:
 - M2 API client: reusable MyAccount client, auth/query injection, response envelope parsing, and live credential validation
 - M3 config commands: `config add`, `list`, `set-default`, and `remove`
 - M4 node read commands: `node list` and `node get`
+- M5 node write commands: `node create` with prototype defaults and `node delete` with confirmation safety
 
 Planned next milestones are tracked in [docs/ROADMAP.md](./docs/ROADMAP.md).
 
@@ -48,6 +49,18 @@ Supported environment overrides:
 - `E2E_AUTH_TOKEN`
 - `E2E_PROJECT_ID`
 - `E2E_LOCATION`
+
+## Node Commands
+
+```bash
+e2ectl node list [--alias <profile>] [--json]
+e2ectl node get <node-id> [--alias <profile>] [--json]
+e2ectl node create --name <name> --plan <plan> --image <image> [--alias <profile>] [--json]
+e2ectl node delete <node-id> [--alias <profile>] [--force] [--json]
+```
+
+`node create` currently sends the documented prototype defaults for the optional fields.
+`node delete` prompts for confirmation unless `--force` is supplied.
 
 ## Development
 

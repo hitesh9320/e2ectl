@@ -84,6 +84,115 @@ describe('MyAccountApiClient', () => {
     );
   });
 
+  it('serializes node create requests with json body defaults', async () => {
+    let seenInput = '';
+    let seenInit: RequestInit | undefined;
+
+    const fetchFn = vi.fn((input: string, init?: RequestInit) => {
+      seenInput = input;
+      seenInit = init;
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () =>
+          Promise.resolve({
+            code: 200,
+            data: {
+              node_create_response: [],
+              total_number_of_node_created: 1,
+              total_number_of_node_requested: 1
+            },
+            errors: {},
+            message: 'Success'
+          })
+      });
+    });
+
+    const client = new MyAccountApiClient(credentials, {
+      baseUrl: 'https://example.test/',
+      fetchFn
+    });
+
+    await client.createNode({
+      backups: false,
+      default_public_ip: false,
+      disable_password: true,
+      enable_bitninja: false,
+      image: 'Ubuntu-24.04-Distro',
+      is_ipv6_availed: false,
+      is_saved_image: false,
+      label: 'default',
+      name: 'node-a',
+      number_of_instances: 1,
+      plan: 'plan-123',
+      ssh_keys: [],
+      start_scripts: []
+    });
+
+    expect(seenInput).toBe(
+      'https://example.test/nodes/?apikey=api-key&project_id=123&location=Delhi'
+    );
+    expect(seenInit?.method).toBe('POST');
+    expect(seenInit?.headers).toMatchObject({
+      Authorization: 'Bearer auth-token',
+      'Content-Type': 'application/json'
+    });
+    expect(seenInit?.body).toBe(
+      JSON.stringify({
+        backups: false,
+        default_public_ip: false,
+        disable_password: true,
+        enable_bitninja: false,
+        image: 'Ubuntu-24.04-Distro',
+        is_ipv6_availed: false,
+        is_saved_image: false,
+        label: 'default',
+        name: 'node-a',
+        number_of_instances: 1,
+        plan: 'plan-123',
+        ssh_keys: [],
+        start_scripts: []
+      })
+    );
+  });
+
+  it('issues delete requests against the node resource path', async () => {
+    let seenInput = '';
+    let seenInit: RequestInit | undefined;
+
+    const fetchFn = vi.fn((input: string, init?: RequestInit) => {
+      seenInput = input;
+      seenInit = init;
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () =>
+          Promise.resolve({
+            code: 200,
+            data: {},
+            errors: {},
+            message: 'Success'
+          })
+      });
+    });
+
+    const client = new MyAccountApiClient(credentials, {
+      baseUrl: 'https://example.test/',
+      fetchFn
+    });
+
+    await client.deleteNode('101');
+
+    expect(seenInput).toBe(
+      'https://example.test/nodes/101/?apikey=api-key&project_id=123&location=Delhi'
+    );
+    expect(seenInit?.method).toBe('DELETE');
+  });
+
   it('raises a CLI error when the API envelope indicates failure', async () => {
     const client = new MyAccountApiClient(credentials, {
       fetchFn: () =>
