@@ -85,6 +85,14 @@ e2ectl config add \
 
 Credentials are validated before the profile is saved.
 
+Import one or more aliases from a downloaded credential file:
+
+```bash
+e2ectl config import --file ~/Downloads/config.json
+```
+
+`e2ectl` reads aliases, API keys, and bearer tokens from the file, prompts once for `project_id` and `location` when needed, validates every imported alias, prints a success summary, and then offers to set a default alias if the config does not already have one.
+
 Set a saved profile as the default alias:
 
 ```bash
@@ -100,6 +108,7 @@ Config commands:
 
 ```bash
 e2ectl config add --alias <name> --api-key <key> --auth-token <token> --project-id <id> --location <Delhi|Chennai>
+e2ectl config import --file <path> [--project-id <id>] [--location <Delhi|Chennai>] [--default <alias>] [--force] [--no-input] [--json]
 e2ectl config list [--json]
 e2ectl config set-default --alias <name> [--json]
 e2ectl config remove --alias <name> [--json]

@@ -164,6 +164,7 @@ describe('node commands', () => {
     isInteractive?: boolean;
   }): {
     confirm: ReturnType<typeof vi.fn>;
+    prompt: ReturnType<typeof vi.fn>;
     runtime: CliRuntime;
     stdout: MemoryWriter;
     stub: ReturnType<typeof createNodeClientStub>;
@@ -175,6 +176,7 @@ describe('node commands', () => {
     const confirm = vi.fn(() =>
       Promise.resolve(options?.confirmResult ?? true)
     );
+    const prompt = vi.fn(() => Promise.resolve(''));
 
     const runtime: CliRuntime = {
       confirm,
@@ -183,6 +185,7 @@ describe('node commands', () => {
         validate: vi.fn()
       },
       isInteractive: options?.isInteractive ?? true,
+      prompt,
       stderr: new MemoryWriter(),
       stdout,
       store
@@ -190,6 +193,7 @@ describe('node commands', () => {
 
     return {
       confirm,
+      prompt,
       runtime,
       stdout,
       stub

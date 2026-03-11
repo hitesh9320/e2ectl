@@ -50,6 +50,4 @@ Ensure profile writes are validated before save and list output is safe for both
 
 ## 4.0 Out of Scope
 
-- Interactive prompts for config input
-- Import/export profile flows
 - Secrets manager integration

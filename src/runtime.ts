@@ -17,6 +17,7 @@ export interface CliRuntime {
   createApiClient(credentials: ResolvedCredentials): MyAccountClient;
   credentialValidator: CredentialValidator;
   isInteractive: boolean;
+  prompt(message: string): Promise<string>;
   stderr: OutputWriter;
   stdout: OutputWriter;
   store: ConfigStore;
@@ -28,6 +29,7 @@ export function createRuntime(): CliRuntime {
     createApiClient: (credentials) => new MyAccountApiClient(credentials),
     credentialValidator: new ApiCredentialValidator(),
     isInteractive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    prompt: promptForInput,
     stderr: process.stderr,
     stdout: process.stdout,
     store: new ConfigStore()
@@ -36,14 +38,18 @@ export function createRuntime(): CliRuntime {
 
 async function promptForConfirmation(message: string): Promise<boolean> {
   const prompt = `${message} [y/N] `;
+  const answer = await promptForInput(prompt);
+  return /^(y|yes)$/i.test(answer.trim());
+}
+
+async function promptForInput(message: string): Promise<string> {
   const readline = createInterface({
     input: process.stdin,
     output: process.stdout
   });
 
   try {
-    const answer = await readline.question(prompt);
-    return /^(y|yes)$/i.test(answer.trim());
+    return await readline.question(message);
   } finally {
     readline.close();
   }

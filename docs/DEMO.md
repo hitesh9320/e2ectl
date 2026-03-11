@@ -38,34 +38,59 @@ npm link
 
 If credentials are already saved in `~/.e2e/config.json`, skip to the next section.
 
+Recommended first-time flow:
+
+```bash
+npm run --silent dev -- config import --file "/path/to/downloaded-config.json"
+```
+
+What happens:
+
+- `e2ectl` reads every alias, API key, and auth token from the file
+- prompts for `Project ID` once
+- prompts for `Location` once
+- validates each alias before saving
+- prints a success summary
+- prompts to set a default alias when the config does not already have one
+
 Example using the local prod credential file:
 
 ```bash
-API_KEY=$(jq -r '."hitesh-prod".api_key' '/Users/hiteshsadhwani/Downloads/config (4).json')
-AUTH_TOKEN=$(jq -r '."hitesh-prod".api_auth_token' '/Users/hiteshsadhwani/Downloads/config (4).json')
+npm run --silent dev -- config import --file '/Users/hiteshsadhwani/Downloads/config (4).json'
 ```
 
-Save the profile:
+If you prefer a fully non-interactive run:
+
+```bash
+npm run --silent dev -- config import \
+  --file '/Users/hiteshsadhwani/Downloads/config (4).json' \
+  --project-id 46429 \
+  --location Delhi \
+  --default prod \
+  --no-input
+```
+
+If needed, you can still add a single profile manually:
 
 ```bash
 npm run --silent dev -- config add \
   --alias prod \
-  --api-key "$API_KEY" \
-  --auth-token "$AUTH_TOKEN" \
+  --api-key <api-key> \
+  --auth-token <auth-token> \
   --project-id 46429 \
   --location Delhi
 ```
 
-Make it the default profile:
+Confirm the saved aliases:
 
 ```bash
-npm run --silent dev -- config set-default --alias prod
 npm run --silent dev -- config list
 ```
 
 Expected result:
 
-- `prod` is marked as `yes` under `Default`
+- the imported aliases are present
+- the selected default alias is marked as `yes` under `Default`
 - masked secrets are compact, for example `****e39d` and `****hUpk`
 
 ## Demo Script
@@ -212,7 +237,8 @@ e2ectl node list
 
 ## Notes For Reviewers
 
-- `config set-default --alias prod` means later commands do not need `--alias prod`
+- `config import --file ...` is the recommended first-time setup path
+- a default alias set during import means later commands do not need `--alias prod`
 - environment variables still override saved profile values
 - CI does not run live API integration tests; live verification is manual
 - the current prototype has been manually verified for:

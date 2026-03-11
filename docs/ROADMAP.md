@@ -92,3 +92,13 @@ Acceptance criteria:
 - `node catalog plans` lists valid plan and image pairs for a selected OS row
 - `e2ectl help`, `e2ectl node help`, and `e2ectl node catalog --help` expose the discovery-first create flow
 - The manual read-only suite covers the catalog endpoints against a real MyAccount project
+
+## M9 — Config Import UX
+
+**Status:** DONE
+
+Acceptance criteria:
+
+- `config import --file ...` imports aliases and secrets from the downloaded credential JSON format
+- Missing shared metadata prompts once for `project_id` and `location` in interactive mode
+- Successful imports print a summary and can immediately set a default alias
