@@ -10,8 +10,6 @@ Current v1 scope:
 - node create and delete commands
 - deterministic `--json` output for automation
 
-Milestone status is tracked in [docs/ROADMAP.md](./docs/ROADMAP.md).
-
 ## Requirements
 
 - Node.js 18+
@@ -39,8 +37,8 @@ npm link
 e2ectl --help
 ```
 
-For a copy-paste demo walkthrough, use [docs/DEMO.md](./docs/DEMO.md).
 For architecture and contribution rules, use [CONTRIBUTING.md](./CONTRIBUTING.md).
+For CI and maintenance expectations, use [docs/MAINTAINING.md](./docs/MAINTAINING.md).
 
 ## Configuration And Auth
 
@@ -160,8 +158,6 @@ e2ectl node create \
   --plan <exact-plan-from-catalog> \
   --image <exact-image-from-catalog>
 ```
-
-For a reviewer-ready, step-by-step version including setup and verification, see [docs/DEMO.md](./docs/DEMO.md).
 
 For `node catalog os`, the human table hides the `Software Version` column when the API only returns blank values for standard distro rows. The field is still preserved in `--json` output and appears in human output when populated.
 
