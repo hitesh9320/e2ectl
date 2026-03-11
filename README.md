@@ -61,6 +61,33 @@ Run the CLI locally:
 npm run dev -- --help
 ```
 
+## Testing Strategy
+
+- `make lint`: Prettier check, ESLint, and TypeScript typecheck
+- `make test`: unit tests only, using Vitest with mocked filesystem and mocked network boundaries
+- `make build`: production TypeScript compile into `dist/`
+- Manual e2e/API tests are planned later and are not part of CI yet
+
+## CI Behavior
+
+GitHub Actions currently runs on:
+
+- pushes to `main`
+- every `pull_request`
+
+The workflow uses a Node.js matrix for `18`, `20`, and `22`. Each matrix job runs:
+
+1. `npm ci`
+2. `make lint`
+3. `make test`
+4. `make build`
+
+That means:
+
+- PRs do run CI
+- direct pushes to `main` run CI
+- pushes to non-`main` branches only run CI once they are part of a PR
+
 ## Milestones
 
 - `M0` scaffold
