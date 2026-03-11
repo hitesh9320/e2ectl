@@ -74,7 +74,7 @@ Acceptance criteria:
 
 ## M7 — CI/Docs/Polish
 
-**Status:** PENDING
+**Status:** DONE
 
 Acceptance criteria:
 
