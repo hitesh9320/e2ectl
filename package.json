@@ -1,0 +1,50 @@
+{
+  "name": "e2ectl",
+  "version": "0.1.0",
+  "description": "CLI prototype for E2E Networks MyAccount.",
+  "type": "module",
+  "bin": {
+    "e2ectl": "dist/app/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node ./scripts/clean.mjs",
+    "dev": "node --import tsx ./src/app/index.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint src tests vitest.config.ts vitest.manual.config.ts",
+    "test": "vitest run",
+    "test:manual": "vitest run --config vitest.manual.config.ts",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "cli",
+    "e2e",
+    "cloud",
+    "myaccount"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^25.4.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "cli-table3": "^0.6.5",
+    "commander": "^14.0.3"
+  }
+}
