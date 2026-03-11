@@ -34,7 +34,7 @@ Acceptance criteria:
 
 ## M3 — Config Commands
 
-**Status:** PENDING
+**Status:** DONE
 
 Acceptance criteria:
 

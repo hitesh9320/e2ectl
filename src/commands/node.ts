@@ -1,6 +1,9 @@
 import { Command } from 'commander';
+import type { CliRuntime } from '../runtime.js';
 
-export function buildNodeCommand(): Command {
+export function buildNodeCommand(runtime: CliRuntime): Command {
+  void runtime;
+
   const command = new Command('node')
     .description('Manage MyAccount nodes.')
     .addHelpText(

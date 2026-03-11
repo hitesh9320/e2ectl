@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { createProgram } from './cli.js';
+import { createRuntime } from './runtime.js';
 import { formatError, isCliError } from './utils/errors.js';
 
 async function main(): Promise<void> {
-  const program = createProgram();
+  const program = createProgram(createRuntime());
 
   try {
     await program.parseAsync(process.argv);

@@ -4,19 +4,21 @@ import type { ConfigFile, ProfileSummary } from '../types/config.js';
 import { stableStringify, type JsonValue } from '../utils/json.js';
 import { maskSecret } from '../utils/mask.js';
 
-export function formatJson(value: JsonValue): string {
-  return `${stableStringify(value)}\n`;
+export function formatJson(value: unknown): string {
+  return `${stableStringify(value as JsonValue)}\n`;
 }
 
 export function summarizeProfiles(config: ConfigFile): ProfileSummary[] {
-  return Object.entries(config.profiles).map(([alias, profile]) => ({
-    alias,
-    isDefault: config.default === alias,
-    api_key: maskSecret(profile.api_key),
-    auth_token: maskSecret(profile.auth_token),
-    project_id: profile.project_id,
-    location: profile.location
-  }));
+  return Object.entries(config.profiles)
+    .sort(([leftAlias], [rightAlias]) => leftAlias.localeCompare(rightAlias))
+    .map(([alias, profile]) => ({
+      alias,
+      isDefault: config.default === alias,
+      api_key: maskSecret(profile.api_key),
+      auth_token: maskSecret(profile.auth_token),
+      project_id: profile.project_id,
+      location: profile.location
+    }));
 }
 
 export function formatProfilesTable(profiles: ProfileSummary[]): string {

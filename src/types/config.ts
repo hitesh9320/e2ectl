@@ -5,6 +5,8 @@ export interface ProfileConfig {
   location: string;
 }
 
+export const VALID_LOCATIONS = ['Delhi', 'Chennai'] as const;
+
 export interface ConfigFile {
   profiles: Record<string, ProfileConfig>;
   default?: string;

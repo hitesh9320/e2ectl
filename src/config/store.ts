@@ -92,6 +92,11 @@ export class ConfigStore {
     await this.write(nextConfig);
     return normalizeConfig(nextConfig);
   }
+
+  async hasProfile(alias: string): Promise<boolean> {
+    const config = await this.read();
+    return config.profiles[alias] !== undefined;
+  }
 }
 
 export function createEmptyConfig(): ConfigFile {
