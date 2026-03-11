@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Internal MyAccount API client with credential validation and node list/get/create/delete support.
 - Config profile commands with masked listings and deterministic JSON output.
 - Expanded unit coverage plus a manual read-only API test lane that is skipped by default.
+- `node action` commands for `power-on`, `power-off`, `lock-vm`, and `save-image`.
 
 ### Changed
 

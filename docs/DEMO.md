@@ -107,13 +107,19 @@ npm run --silent dev -- --help
 npm run --silent dev -- node --help
 ```
 
-### 3. Show catalog help
+### 3. Show action help
+
+```bash
+npm run --silent dev -- node action --help
+```
+
+### 4. Show catalog help
 
 ```bash
 npm run --silent dev -- node catalog --help
 ```
 
-### 4. Discover valid OS rows
+### 5. Discover valid OS rows
 
 ```bash
 npm run --silent dev -- node catalog os
@@ -128,7 +134,7 @@ For the current demo, use:
 - `os`: `Ubuntu`
 - `os version`: `24.04`
 
-### 5. Discover valid plan and image pairs
+### 6. Discover valid plan and image pairs
 
 ```bash
 npm run --silent dev -- node catalog plans \
@@ -152,7 +158,7 @@ Important:
 - always prefer the exact `plan` and `image` values returned by the live catalog
 - do not hardcode plan slugs across demos unless you have just verified them from `node catalog plans`
 
-### 6. Create a node
+### 7. Create a node
 
 Choose a unique name:
 
@@ -191,13 +197,13 @@ Fields intentionally omitted and left to backend behavior/defaults:
 - `image_id`
 - `disk`
 
-### 7. Verify the node appears in the list
+### 8. Verify the node appears in the list
 
 ```bash
 npm run --silent dev -- node list
 ```
 
-### 8. Inspect full node details
+### 9. Inspect full node details
 
 Replace `<NODE_ID>` with the id returned from create or seen in `node list`:
 
@@ -205,7 +211,18 @@ Replace `<NODE_ID>` with the id returned from create or seen in `node list`:
 npm run --silent dev -- node get <NODE_ID>
 ```
 
-### 9. Optional cleanup
+### 10. Optional node actions
+
+These commands use the same saved alias or context overrides as the rest of the `node` surface:
+
+```bash
+npm run --silent dev -- node action power-off <NODE_ID>
+npm run --silent dev -- node action power-on <NODE_ID>
+npm run --silent dev -- node action lock-vm <NODE_ID>
+npm run --silent dev -- node action save-image <NODE_ID> --name "demo-node-image-$(date +%Y%m%d-%H%M%S)"
+```
+
+### 11. Optional cleanup
 
 If you want to remove the demo node after the walkthrough:
 
@@ -226,6 +243,7 @@ After `npm link`, the same demo can be run without `npm run`:
 ```bash
 e2ectl --help
 e2ectl node --help
+e2ectl node action --help
 e2ectl node catalog os
 e2ectl node catalog plans \
   --display-category "Linux Virtual Node" \
@@ -249,3 +267,4 @@ e2ectl node list
   - plan/image discovery
   - real node create
   - real node list/get
+- node action commands currently have unit coverage and documented operator flow, but are not yet part of the manual live verification list

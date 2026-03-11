@@ -133,4 +133,33 @@ export interface NodeCreateResult {
   total_number_of_node_requested: number;
 }
 
+export type NodeActionType =
+  | 'lock_vm'
+  | 'power_off'
+  | 'power_on'
+  | 'save_images';
+
+export interface SimpleNodeActionRequest {
+  type: Exclude<NodeActionType, 'save_images'>;
+}
+
+export interface NodeSaveImageRequest {
+  name: string;
+  type: 'save_images';
+}
+
+export type NodeActionRequest =
+  | NodeSaveImageRequest
+  | SimpleNodeActionRequest;
+
+export interface NodeActionResult {
+  action_type: string;
+  created_at: string;
+  id: number;
+  image_id?: string;
+  resource_id: string;
+  resource_name: string;
+  status: string;
+}
+
 export type NodeDeleteResult = Record<string, never>;

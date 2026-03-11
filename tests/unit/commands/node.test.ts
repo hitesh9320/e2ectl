@@ -3,7 +3,10 @@ import type { MyAccountClient } from '../../../src/client/api.js';
 import { ConfigStore } from '../../../src/config/store.js';
 import type { CliRuntime } from '../../../src/runtime.js';
 import type { ResolvedCredentials } from '../../../src/types/config.js';
-import type { NodeCreateRequest } from '../../../src/types/node.js';
+import type {
+  NodeActionRequest,
+  NodeCreateRequest
+} from '../../../src/types/node.js';
 import { createTestConfigPath, MemoryWriter } from '../../helpers/runtime.js';
 
 function createNodeClientStub() {
@@ -78,6 +81,24 @@ function createNodeClientStub() {
       message: 'Success'
     })
   );
+  const runNodeAction = vi.fn(
+    (nodeId: string, body: NodeActionRequest) =>
+      Promise.resolve({
+        code: 200,
+        data: {
+          action_type: body.type,
+          created_at: '2026-03-11T10:05:00Z',
+          ...(body.type === 'save_images' ? { image_id: 'img-123' } : {}),
+          id: 301,
+          resource_id: nodeId,
+          resource_name: 'node-a',
+          status: body.type === 'power_off' ? 'in_progress' : 'done'
+        },
+        errors: {},
+        message:
+          body.type === 'save_images' ? 'Image creation initiated' : 'Success'
+      })
+  );
   const listNodeCatalogOs = vi.fn(() =>
     Promise.resolve({
       code: 200,
@@ -144,6 +165,8 @@ function createNodeClientStub() {
     listNodeCatalogPlans,
     listNodes,
     post: vi.fn(),
+    put: vi.fn(),
+    runNodeAction,
     request: vi.fn(),
     validateCredentials: vi.fn()
   };
@@ -155,6 +178,7 @@ function createNodeClientStub() {
     listNodeCatalogOs,
     listNodeCatalogPlans,
     listNodes,
+    runNodeAction,
     stub
   };
 }
@@ -283,6 +307,105 @@ describe('node commands', () => {
     expect(stdout.buffer).toContain('ID: 101');
     expect(stdout.buffer).toContain('Name: node-a');
     expect(stdout.buffer).toContain('Status: Running');
+  });
+
+  it('powers on a node through the action namespace', async () => {
+    const { runtime, stdout, stub } = createRuntimeFixture();
+    await seedProfile(runtime);
+    const program = createProgram(runtime);
+
+    await program.parseAsync([
+      'node',
+      'e2ectl',
+      '--json',
+      'node',
+      'action',
+      'power-on',
+      '101',
+      '--alias',
+      'prod'
+    ]);
+
+    expect(stub.runNodeAction).toHaveBeenCalledWith('101', {
+      type: 'power_on'
+    });
+    expect(stdout.buffer).toContain('"action": "power-on"');
+    expect(stdout.buffer).toContain('"action_type": "power_on"');
+  });
+
+  it('powers off a node through the action namespace', async () => {
+    const { runtime, stdout, stub } = createRuntimeFixture();
+    await seedProfile(runtime);
+    const program = createProgram(runtime);
+
+    await program.parseAsync([
+      'node',
+      'e2ectl',
+      '--json',
+      'node',
+      'action',
+      'power-off',
+      '101',
+      '--alias',
+      'prod'
+    ]);
+
+    expect(stub.runNodeAction).toHaveBeenCalledWith('101', {
+      type: 'power_off'
+    });
+    expect(stdout.buffer).toContain('"action": "power-off"');
+    expect(stdout.buffer).toContain('"status": "in_progress"');
+  });
+
+  it('locks a node in human-readable mode', async () => {
+    const { runtime, stdout, stub } = createRuntimeFixture();
+    await seedProfile(runtime);
+    const program = createProgram(runtime);
+
+    await program.parseAsync([
+      'node',
+      'e2ectl',
+      'node',
+      'action',
+      'lock-vm',
+      '101',
+      '--alias',
+      'prod'
+    ]);
+
+    expect(stub.runNodeAction).toHaveBeenCalledWith('101', {
+      type: 'lock_vm'
+    });
+    expect(stdout.buffer).toContain('Node ID: 101');
+    expect(stdout.buffer).toContain('Action: lock_vm');
+  });
+
+  it('saves a node as an image with a required image name', async () => {
+    const { runtime, stdout, stub } = createRuntimeFixture();
+    await seedProfile(runtime);
+    const program = createProgram(runtime);
+
+    await program.parseAsync([
+      'node',
+      'e2ectl',
+      '--json',
+      'node',
+      'action',
+      'save-image',
+      '101',
+      '--name',
+      'golden-image',
+      '--alias',
+      'prod'
+    ]);
+
+    expect(stub.runNodeAction).toHaveBeenCalledWith('101', {
+      name: 'golden-image',
+      type: 'save_images'
+    });
+    expect(stdout.buffer).toContain('"action": "save-image"');
+    expect(stdout.buffer).toContain('"image_id": "img-123"');
+    expect(stdout.buffer).toContain('"message": "Image creation initiated"');
   });
 
   it('creates a public-node request that stays compatible with backend serializer defaults', async () => {
@@ -492,6 +615,7 @@ describe('node commands', () => {
     );
 
     expect(nodeCommand).toBeDefined();
+    expect(nodeCommand?.helpInformation()).toContain('action');
     expect(nodeCommand?.helpInformation()).toContain('catalog');
     expect(nodeCommand?.helpInformation()).toContain('create');
   });

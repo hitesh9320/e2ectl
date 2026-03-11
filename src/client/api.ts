@@ -1,6 +1,8 @@
 import type { ApiEnvelope, ApiRequestOptions } from '../types/api.js';
 import type { ResolvedCredentials } from '../types/config.js';
 import type {
+  NodeActionRequest,
+  NodeActionResult,
   NodeCatalogOsData,
   NodeCatalogPlan,
   NodeCatalogQuery,
@@ -61,6 +63,14 @@ export interface MyAccountClient {
     path: string,
     options?: Omit<ApiRequestOptions, 'method' | 'path'>
   ): Promise<ApiEnvelope<TData>>;
+  put<TData>(
+    path: string,
+    options?: Omit<ApiRequestOptions, 'method' | 'path'>
+  ): Promise<ApiEnvelope<TData>>;
+  runNodeAction(
+    nodeId: string,
+    body: NodeActionRequest
+  ): Promise<ApiEnvelope<NodeActionResult>>;
   request<TData>(options: ApiRequestOptions): Promise<ApiEnvelope<TData>>;
   validateCredentials(): Promise<ApiEnvelope<unknown>>;
 }
@@ -114,6 +124,17 @@ export class MyAccountApiClient implements MyAccountClient {
     });
   }
 
+  async put<TData>(
+    path: string,
+    options: Omit<ApiRequestOptions, 'method' | 'path'> = {}
+  ): Promise<ApiEnvelope<TData>> {
+    return this.request<TData>({
+      ...options,
+      method: 'PUT',
+      path
+    });
+  }
+
   async createNode(
     body: NodeCreateRequest
   ): Promise<ApiEnvelope<NodeCreateResult>> {
@@ -152,6 +173,15 @@ export class MyAccountApiClient implements MyAccountClient {
 
   async getNode(nodeId: string): Promise<ApiEnvelope<NodeDetails>> {
     return this.get<NodeDetails>(`/nodes/${nodeId}/`);
+  }
+
+  async runNodeAction(
+    nodeId: string,
+    body: NodeActionRequest
+  ): Promise<ApiEnvelope<NodeActionResult>> {
+    return this.put<NodeActionResult>(`/nodes/${nodeId}/actions/`, {
+      body
+    });
   }
 
   async request<TData>(

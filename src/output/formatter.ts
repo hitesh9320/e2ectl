@@ -2,6 +2,7 @@ import Table from 'cli-table3';
 
 import type { ConfigFile, ProfileSummary } from '../types/config.js';
 import type {
+  NodeActionResult,
   NodeCatalogOsData,
   NodeCatalogOsEntry,
   NodeCatalogPlan,
@@ -204,6 +205,23 @@ export function formatNodeDetails(node: NodeDetails): string {
     ['Memory', node.memory ?? ''],
     ['vCPUs', node.vcpus ?? '']
   ];
+
+  return rows.map(([label, value]) => `${label}: ${value}`).join('\n');
+}
+
+export function formatNodeActionResult(result: NodeActionResult): string {
+  const rows: Array<[string, string]> = [
+    ['Request ID', String(result.id)],
+    ['Node ID', result.resource_id],
+    ['Node', result.resource_name],
+    ['Action', result.action_type],
+    ['Status', result.status],
+    ['Created At', result.created_at]
+  ];
+
+  if (result.image_id !== undefined) {
+    rows.push(['Image ID', result.image_id]);
+  }
 
   return rows.map(([label, value]) => `${label}: ${value}`).join('\n');
 }

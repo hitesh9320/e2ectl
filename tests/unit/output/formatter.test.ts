@@ -1,5 +1,6 @@
 import {
   formatJson,
+  formatNodeActionResult,
   formatNodeCatalogOsTable,
   formatNodeCatalogPlansTable,
   formatNodeCreateResult,
@@ -117,6 +118,23 @@ describe('formatter helpers', () => {
     expect(output).toContain('Requested: 1');
     expect(output).toContain('Created: 1');
     expect(output).toContain('node-b');
+  });
+
+  it('renders node action summaries with image details when present', () => {
+    const output = formatNodeActionResult({
+      action_type: 'save_images',
+      created_at: '2026-03-11T10:05:00Z',
+      id: 301,
+      image_id: 'img-123',
+      resource_id: '101',
+      resource_name: 'node-a',
+      status: 'done'
+    });
+
+    expect(output).toContain('Request ID: 301');
+    expect(output).toContain('Node ID: 101');
+    expect(output).toContain('Action: save_images');
+    expect(output).toContain('Image ID: img-123');
   });
 
   it('flattens OS catalog rows into command-ready entries', () => {

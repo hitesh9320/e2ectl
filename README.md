@@ -7,7 +7,7 @@ Current v1 scope:
 - local profile and auth management
 - node read commands
 - node catalog discovery for valid plan/image pairs
-- node create and delete commands
+- node create, delete, and selected action commands
 - deterministic `--json` output for automation
 
 Milestone status is tracked in [docs/ROADMAP.md](./docs/ROADMAP.md).
@@ -133,6 +133,10 @@ e2ectl node get <node-id> [--alias <profile>] [--project-id <id>] [--location <D
 e2ectl node catalog os [--alias <profile>] [--project-id <id>] [--location <Delhi|Chennai>] [--json]
 e2ectl node catalog plans --display-category <value> --category <value> --os <value> --os-version <value> [--alias <profile>] [--project-id <id>] [--location <Delhi|Chennai>] [--json]
 e2ectl node create --name <name> --plan <plan> --image <image> [--alias <profile>] [--project-id <id>] [--location <Delhi|Chennai>] [--json]
+e2ectl node action power-on <node-id> [--alias <profile>] [--project-id <id>] [--location <Delhi|Chennai>] [--json]
+e2ectl node action power-off <node-id> [--alias <profile>] [--project-id <id>] [--location <Delhi|Chennai>] [--json]
+e2ectl node action lock-vm <node-id> [--alias <profile>] [--project-id <id>] [--location <Delhi|Chennai>] [--json]
+e2ectl node action save-image <node-id> --name <image-name> [--alias <profile>] [--project-id <id>] [--location <Delhi|Chennai>] [--json]
 e2ectl node delete <node-id> [--alias <profile>] [--project-id <id>] [--location <Delhi|Chennai>] [--force] [--json]
 ```
 
@@ -160,6 +164,10 @@ e2ectl node create \
   --name demo-node \
   --plan <exact-plan-from-catalog> \
   --image <exact-image-from-catalog>
+e2ectl node action power-off <node-id> --alias prod
+e2ectl node action power-on <node-id> --alias prod
+e2ectl node action lock-vm <node-id> --alias prod
+e2ectl node action save-image <node-id> --name demo-node-image --alias prod
 ```
 
 For a reviewer-ready, step-by-step version including setup and verification, see [docs/DEMO.md](./docs/DEMO.md).
@@ -171,6 +179,7 @@ For `node catalog os`, the human table hides the `Software Version` column when 
 - Human-readable output is the default.
 - `--json` emits deterministic JSON for agents and scripts.
 - `config list` masks stored secrets in compact form such as `****e39d`.
+- `node action save-image` requires a non-empty `--name`.
 - `node delete` prompts for confirmation unless `--force` is supplied.
 - MyAccount API requests use bearer auth plus required query parameters on every call.
 

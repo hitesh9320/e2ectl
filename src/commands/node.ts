@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { resolveCredentials } from '../client/auth.js';
 import {
   formatJson,
+  formatNodeActionResult,
   formatNodeCatalogOsTable,
   formatNodeCatalogPlansTable,
   formatNodeCreateResult,
@@ -11,6 +12,7 @@ import {
 } from '../output/formatter.js';
 import type { CliRuntime } from '../runtime.js';
 import type {
+  NodeActionRequest,
   NodeCatalogPlan,
   NodeCatalogQuery,
   NodeCreateRequest
@@ -35,6 +37,10 @@ interface NodeCreateCommandOptions extends NodeAliasOptions {
 
 interface NodeDeleteCommandOptions extends NodeAliasOptions {
   force?: boolean;
+}
+
+interface NodeSaveImageCommandOptions extends NodeAliasOptions {
+  name: string;
 }
 
 interface NodeCatalogPlansCommandOptions extends NodeAliasOptions {
@@ -62,9 +68,11 @@ const DEFAULT_NODE_CREATE_REQUEST = {
 
 export function buildNodeCommand(runtime: CliRuntime): Command {
   const command = new Command('node').description('Manage MyAccount nodes.');
+  const actionCommand = buildNodeActionCommand(runtime);
   const catalogCommand = buildNodeCatalogCommand(runtime);
 
   command.helpCommand('help [command]', 'Show help for a node command');
+  command.addCommand(actionCommand);
   command.addCommand(catalogCommand);
 
   command
@@ -227,6 +235,66 @@ export function buildNodeCommand(runtime: CliRuntime): Command {
   return command;
 }
 
+function buildNodeActionCommand(runtime: CliRuntime): Command {
+  const command = new Command('action').description(
+    'Run supported node actions.'
+  );
+
+  command.helpCommand('help [command]', 'Show help for a node action command');
+
+  registerSimpleNodeActionCommand(command, runtime, {
+    actionType: 'power_on',
+    commandName: 'power-on',
+    description: 'Power on a node.'
+  });
+  registerSimpleNodeActionCommand(command, runtime, {
+    actionType: 'power_off',
+    commandName: 'power-off',
+    description: 'Power off a node.'
+  });
+  registerSimpleNodeActionCommand(command, runtime, {
+    actionType: 'lock_vm',
+    commandName: 'lock-vm',
+    description: 'Lock a node.'
+  });
+
+  command
+    .command('save-image <nodeId>')
+    .description('Save a node as an image.')
+    .requiredOption('--name <name>', 'Image name to create.')
+    .option('--alias <alias>', 'Saved profile alias to use for this command.')
+    .option(
+      '--project-id <projectId>',
+      'Override the project id for this command.'
+    )
+    .option('--location <location>', 'Override the location for this command.')
+    .action(
+      async (
+        nodeId: string,
+        options: NodeSaveImageCommandOptions,
+        commandInstance: Command
+      ) => {
+        await executeNodeAction(
+          runtime,
+          'save-image',
+          nodeId,
+          options,
+          {
+            name: normalizeRequiredString(options.name, 'Image name', '--name'),
+            type: 'save_images'
+          },
+          commandInstance
+        );
+      }
+    );
+
+  command.action(() => {
+    command.outputHelp();
+  });
+
+  return command;
+}
+
 function buildNodeCatalogCommand(runtime: CliRuntime): Command {
   const command = new Command('catalog').description(
     'Discover valid OS, plan, and image combinations for node creation.'
@@ -355,6 +423,70 @@ async function createNodeClient(
   });
 
   return runtime.createApiClient(credentials);
+}
+
+async function executeNodeAction(
+  runtime: CliRuntime,
+  commandName: string,
+  nodeId: string,
+  options: NodeAliasOptions,
+  request: NodeActionRequest,
+  commandInstance: Command
+): Promise<void> {
+  assertNodeId(nodeId);
+  const client = await createNodeClient(runtime, options);
+  const response = await client.runNodeAction(nodeId, request);
+
+  if (commandInstance.optsWithGlobals<GlobalOptions>().json ?? false) {
+    runtime.stdout.write(
+      formatJson({
+        action: commandName,
+        message: response.message,
+        result: response.data
+      })
+    );
+    return;
+  }
+
+  runtime.stdout.write(`${formatNodeActionResult(response.data)}\n`);
+}
+
+function registerSimpleNodeActionCommand(
+  command: Command,
+  runtime: CliRuntime,
+  options: {
+    actionType: Exclude<NodeActionRequest['type'], 'save_images'>;
+    commandName: string;
+    description: string;
+  }
+): void {
+  command
+    .command(`${options.commandName} <nodeId>`)
+    .description(options.description)
+    .option('--alias <alias>', 'Saved profile alias to use for this command.')
+    .option(
+      '--project-id <projectId>',
+      'Override the project id for this command.'
+    )
+    .option('--location <location>', 'Override the location for this command.')
+    .action(
+      async (
+        nodeId: string,
+        commandOptions: NodeAliasOptions,
+        commandInstance: Command
+      ) => {
+        await executeNodeAction(
+          runtime,
+          options.commandName,
+          nodeId,
+          commandOptions,
+          {
+            type: options.actionType
+          },
+          commandInstance
+        );
+      }
+    );
 }
 
 function assertCanDelete(runtime: CliRuntime): void {
