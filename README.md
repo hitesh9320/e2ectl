@@ -144,6 +144,8 @@ e2ectl node create \
 
 For a reviewer-ready, step-by-step version including setup and verification, see [docs/DEMO.md](./docs/DEMO.md).
 
+For `node catalog os`, the human table hides the `Software Version` column when the API only returns blank values for standard distro rows. The field is still preserved in `--json` output and appears in human output when populated.
+
 ## Output And Safety
 
 - Human-readable output is the default.

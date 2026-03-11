@@ -148,6 +148,23 @@ describe('formatter helpers', () => {
     const table = formatNodeCatalogOsTable(entries);
     expect(table).toContain('Linux Virtual Node');
     expect(table).toContain('24.04');
+    expect(table).not.toContain('Software Version');
+  });
+
+  it('shows the software version column when the API returns populated values', () => {
+    const table = formatNodeCatalogOsTable([
+      {
+        category: 'TensorFlow',
+        display_category: 'GPU',
+        number_of_domains: null,
+        os: 'Ubuntu',
+        os_version: '20.04',
+        software_version: '2.15'
+      }
+    ]);
+
+    expect(table).toContain('Software Version');
+    expect(table).toContain('2.15');
   });
 
   it('renders plan and image catalog rows for human selection', () => {

@@ -94,6 +94,8 @@ npm run --silent dev -- node catalog --help
 npm run --silent dev -- node catalog os
 ```
 
+For standard distro rows like Ubuntu, Debian, AlmaLinux, and CentOS, the human table usually omits the `Software Version` column because the backend sends that field as blank. If the API returns real software-version values for application-style images, the column appears automatically.
+
 For the current prototype demo, use:
 
 - `display category`: `Linux Virtual Node`

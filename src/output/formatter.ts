@@ -113,24 +113,27 @@ export function summarizeNodeCatalogOs(
 export function formatNodeCatalogOsTable(
   entries: NodeCatalogOsEntry[]
 ): string {
+  const showSoftwareVersion = entries.some((entry) =>
+    hasVisibleValue(entry.software_version)
+  );
   const table = new Table({
-    head: [
-      'Display Category',
-      'Category',
-      'OS',
-      'OS Version',
-      'Software Version'
-    ]
+    head: showSoftwareVersion
+      ? ['Display Category', 'Category', 'OS', 'OS Version', 'Software Version']
+      : ['Display Category', 'Category', 'OS', 'OS Version']
   });
 
   for (const entry of entries) {
-    table.push([
-      entry.display_category,
-      entry.category,
-      entry.os,
-      entry.os_version,
-      entry.software_version
-    ]);
+    table.push(
+      showSoftwareVersion
+        ? [
+            entry.display_category,
+            entry.category,
+            entry.os,
+            entry.os_version,
+            entry.software_version
+          ]
+        : [entry.display_category, entry.category, entry.os, entry.os_version]
+    );
   }
 
   return table.toString();
@@ -231,4 +234,8 @@ function formatPrice(
   }
 
   return currency === undefined ? String(value) : `${value} ${currency}`;
+}
+
+function hasVisibleValue(value: string): boolean {
+  return value.trim().length > 0;
 }
