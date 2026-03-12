@@ -25,6 +25,19 @@ describe('import-file parser', () => {
     );
   });
 
+  it('rejects blank alias keys after trimming whitespace', () => {
+    expect(() =>
+      parseImportedProfiles(
+        JSON.stringify({
+          '   ': {
+            api_auth_token: 'auth-token',
+            api_key: 'api-key'
+          }
+        })
+      )
+    ).toThrow(/empty alias key/i);
+  });
+
   it('rejects aliases without required secrets', () => {
     expect(() =>
       parseImportedProfiles(

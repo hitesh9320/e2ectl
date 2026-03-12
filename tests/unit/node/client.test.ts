@@ -12,29 +12,29 @@ class StubTransport implements MyAccountTransport {
   readonly postMock = vi.fn();
   readonly requestMock = vi.fn();
 
-  delete<TResponse extends ApiEnvelope<unknown>>(
+  delete<TResponse = ApiEnvelope<unknown>>(
     path: string,
-    options?: Omit<ApiRequestOptions, 'method' | 'path'>
+    options?: Omit<ApiRequestOptions<TResponse>, 'method' | 'path'>
   ): Promise<TResponse> {
     return this.deleteMock(path, options) as Promise<TResponse>;
   }
 
-  get<TResponse extends ApiEnvelope<unknown>>(
+  get<TResponse = ApiEnvelope<unknown>>(
     path: string,
-    options?: Omit<ApiRequestOptions, 'method' | 'path'>
+    options?: Omit<ApiRequestOptions<TResponse>, 'method' | 'path'>
   ): Promise<TResponse> {
     return this.getMock(path, options) as Promise<TResponse>;
   }
 
-  post<TResponse extends ApiEnvelope<unknown>>(
+  post<TResponse = ApiEnvelope<unknown>>(
     path: string,
-    options?: Omit<ApiRequestOptions, 'method' | 'path'>
+    options?: Omit<ApiRequestOptions<TResponse>, 'method' | 'path'>
   ): Promise<TResponse> {
     return this.postMock(path, options) as Promise<TResponse>;
   }
 
-  request<TResponse extends ApiEnvelope<unknown>>(
-    options: ApiRequestOptions
+  request<TResponse = ApiEnvelope<unknown>>(
+    options: ApiRequestOptions<TResponse>
   ): Promise<TResponse> {
     return this.requestMock(options) as Promise<TResponse>;
   }

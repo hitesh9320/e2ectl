@@ -1,9 +1,11 @@
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
 import type { ConfigFile } from '../../../src/config/index.js';
 import { ConfigStore, createEmptyConfig } from '../../../src/config/store.js';
+
+const itPosix = process.platform === 'win32' ? it.skip : it;
 
 describe('ConfigStore', () => {
   it('returns an empty config when the file does not exist', async () => {
@@ -44,6 +46,54 @@ describe('ConfigStore', () => {
       default_location: 'Chennai'
     });
   });
+
+  itPosix(
+    'writes config files and directories with restrictive permissions',
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'e2ectl-config-'));
+      const configPath = path.join(root, '.e2e', 'config.json');
+      const store = new ConfigStore({ configPath });
+
+      await store.upsertProfile('prod', {
+        api_key: 'api-prod',
+        auth_token: 'auth-prod'
+      });
+
+      const directoryStats = await stat(path.dirname(configPath));
+      const fileStats = await stat(configPath);
+
+      expect(directoryStats.mode & 0o777).toBe(0o700);
+      expect(fileStats.mode & 0o777).toBe(0o600);
+    }
+  );
+
+  itPosix(
+    'tightens broader existing permissions during normal writes',
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'e2ectl-config-'));
+      const configPath = path.join(root, '.e2e', 'config.json');
+      const store = new ConfigStore({ configPath });
+
+      await store.upsertProfile('prod', {
+        api_key: 'api-prod',
+        auth_token: 'auth-prod'
+      });
+
+      await chmod(path.dirname(configPath), 0o755);
+      await chmod(configPath, 0o644);
+
+      await store.updateProfile('prod', {
+        default_project_id: '46429',
+        default_location: 'Delhi'
+      });
+
+      const directoryStats = await stat(path.dirname(configPath));
+      const fileStats = await stat(configPath);
+
+      expect(directoryStats.mode & 0o777).toBe(0o700);
+      expect(fileStats.mode & 0o777).toBe(0o600);
+    }
+  );
 
   it('updates saved per-alias default context', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'e2ectl-config-'));

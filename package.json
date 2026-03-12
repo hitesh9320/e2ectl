@@ -1,7 +1,7 @@
 {
   "name": "e2ectl",
   "version": "0.1.0",
-  "description": "CLI prototype for E2E Networks MyAccount.",
+  "description": "OSS CLI for E2E Networks MyAccount.",
   "type": "module",
   "bin": {
     "e2ectl": "dist/app/index.js"

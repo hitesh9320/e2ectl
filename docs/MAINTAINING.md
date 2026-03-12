@@ -16,6 +16,8 @@ Optional live verification:
 npm run test:manual
 ```
 
+For pre-release smoke checks, also verify a clean-room first-user flow with a temporary `HOME`: import a credential file, save defaults, run `config list`, and exercise read-only node commands against live credentials.
+
 ## Source Layout
 
 The maintained v1 tree is:
@@ -31,6 +33,7 @@ src/
 
 Detailed architecture rules live in [CONTRIBUTING.md](../CONTRIBUTING.md). Keep `app/` bootstrap-only, keep commands thin, and keep formatter-owned JSON output deterministic.
 Keep generic API failure handling centralized in `src/myaccount/transport.ts`, and keep node-specific endpoint parsing in `src/node/client.ts`. Cross-domain imports should go through each domain `index.ts`.
+Keep config persistence secure and atomic during normal writes, and keep Commander usage-error normalization centralized at the CLI entrypoint.
 
 ## CI Contract
 
@@ -53,6 +56,16 @@ Each job runs:
 4. `make build`
 
 The manual live API suite is intentionally not part of CI.
+
+## Release Smoke Check
+
+Before calling a branch production-ready, verify:
+
+1. clean install from source: `npm install`, `make build`, `npm link`
+2. first-time setup from a clean temp `HOME`
+3. `config import` and `config list` behavior
+4. read-only live API calls such as `node catalog os`, `node catalog plans`, and `node list`
+5. normal repo gates: `make lint`, `make test`, `make build`
 
 ## Documentation Duties
 

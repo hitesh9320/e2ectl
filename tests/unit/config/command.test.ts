@@ -33,6 +33,10 @@ class StubCredentialValidator extends ApiCredentialValidator {
   }
 }
 
+function toJsonOutput(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
 describe('config commands', () => {
   function createRuntimeFixture(): {
     confirm: ReturnType<typeof vi.fn>;
@@ -110,12 +114,22 @@ describe('config commands', () => {
         default_location: 'Delhi'
       }
     ]);
-    expect(stdout.buffer).toContain('"action": "saved"');
-    expect(stdout.buffer).toContain('"alias": "prod"');
-    expect(stdout.buffer).toContain('"api_key": "****3456"');
-    expect(stdout.buffer).toContain('"auth_token": "****4321"');
-    expect(stdout.buffer).toContain('"default_project_id": "12345"');
-    expect(stdout.buffer).toContain('"default_location": "Delhi"');
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'saved',
+        default: 'prod',
+        profiles: [
+          {
+            alias: 'prod',
+            api_key: '****3456',
+            auth_token: '****4321',
+            default_location: 'Delhi',
+            default_project_id: '12345',
+            isDefault: true
+          }
+        ]
+      })
+    );
   });
 
   it('lists profiles with masked table output and default context columns', async () => {
@@ -136,6 +150,49 @@ describe('config commands', () => {
     expect(stdout.buffer).toContain('****4321');
     expect(stdout.buffer).toContain('12345');
     expect(stdout.buffer).toContain('Delhi');
+  });
+
+  it('lists profiles in deterministic json mode', async () => {
+    const { runtime, stdout, store } = createRuntimeFixture();
+    const program = createProgram(runtime);
+
+    await store.upsertProfile('prod', {
+      api_key: 'api-123456',
+      auth_token: 'auth-654321',
+      default_project_id: '12345',
+      default_location: 'Delhi'
+    });
+    await store.upsertProfile('staging', {
+      api_key: 'api-999999',
+      auth_token: 'auth-888888'
+    });
+
+    await program.parseAsync(['node', 'e2ectl', '--json', 'config', 'list']);
+
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'list',
+        default: 'prod',
+        profiles: [
+          {
+            alias: 'prod',
+            api_key: '****3456',
+            auth_token: '****4321',
+            default_location: 'Delhi',
+            default_project_id: '12345',
+            isDefault: true
+          },
+          {
+            alias: 'staging',
+            api_key: '****9999',
+            auth_token: '****8888',
+            default_location: '',
+            default_project_id: '',
+            isDefault: false
+          }
+        ]
+      })
+    );
   });
 
   it('sets the default alias', async () => {
@@ -165,7 +222,30 @@ describe('config commands', () => {
       'staging'
     ]);
 
-    expect(stdout.buffer).toContain('"default": "staging"');
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'set-default',
+        default: 'staging',
+        profiles: [
+          {
+            alias: 'prod',
+            api_key: '****3456',
+            auth_token: '****4321',
+            default_location: 'Delhi',
+            default_project_id: '12345',
+            isDefault: false
+          },
+          {
+            alias: 'staging',
+            api_key: '****9999',
+            auth_token: '****8888',
+            default_location: 'Chennai',
+            default_project_id: '67890',
+            isDefault: true
+          }
+        ]
+      })
+    );
   });
 
   it('updates the default context for a saved alias', async () => {
@@ -191,9 +271,22 @@ describe('config commands', () => {
       'Delhi'
     ]);
 
-    expect(stdout.buffer).toContain('"action": "set-context"');
-    expect(stdout.buffer).toContain('"default_project_id": "46429"');
-    expect(stdout.buffer).toContain('"default_location": "Delhi"');
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'set-context',
+        default: 'prod',
+        profiles: [
+          {
+            alias: 'prod',
+            api_key: '****3456',
+            auth_token: '****4321',
+            default_location: 'Delhi',
+            default_project_id: '46429',
+            isDefault: true
+          }
+        ]
+      })
+    );
   });
 
   it('removes a saved profile', async () => {
@@ -217,7 +310,13 @@ describe('config commands', () => {
       'prod'
     ]);
 
-    expect(stdout.buffer).toContain('"profiles": []');
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'removed',
+        default: null,
+        profiles: []
+      })
+    );
   });
 
   it('rejects unsupported default locations before validation', async () => {
@@ -241,6 +340,31 @@ describe('config commands', () => {
       ])
     ).rejects.toThrow(/Unsupported default location/i);
     expect(validator.calls).toHaveLength(0);
+  });
+
+  it('rejects blank aliases before validation and does not persist config', async () => {
+    const { runtime, store, validator } = createRuntimeFixture();
+    const program = createProgram(runtime);
+
+    await expect(
+      program.parseAsync([
+        'node',
+        'e2ectl',
+        'config',
+        'add',
+        '--alias',
+        '   ',
+        '--api-key',
+        'api-123456',
+        '--auth-token',
+        'auth-654321'
+      ])
+    ).rejects.toThrow(/Profile alias cannot be empty/i);
+
+    expect(validator.calls).toHaveLength(0);
+    await expect(store.read()).resolves.toEqual({
+      profiles: {}
+    });
   });
 
   it('imports aliases, prompts for shared default context, and offers a default alias', async () => {
@@ -350,9 +474,26 @@ describe('config commands', () => {
       default_project_id: '46429',
       default_location: 'Delhi'
     });
-    expect(stdout.buffer).toContain('"action": "imported"');
-    expect(stdout.buffer).toContain('"default": "prod"');
-    expect(stdout.buffer).toContain('"imported_count": 1');
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'imported',
+        default: 'prod',
+        imported_aliases: ['prod'],
+        imported_count: 1,
+        profiles: [
+          {
+            alias: 'prod',
+            api_key: '****prod',
+            auth_token: '****prod',
+            default_location: 'Delhi',
+            default_project_id: '46429',
+            isDefault: true
+          }
+        ],
+        saved_default_location: 'Delhi',
+        saved_default_project_id: '46429'
+      })
+    );
   });
 
   it('allows non-interactive imports without default project or location', async () => {
@@ -389,5 +530,98 @@ describe('config commands', () => {
     });
     expect(stdout.buffer).toContain('Imported 1 profile');
     expect(stdout.buffer).toContain('No default profile was set.');
+  });
+
+  it('leaves the saved config unchanged when the requested default alias is blank', async () => {
+    const { runtime, store } = createRuntimeFixture();
+    const program = createProgram(runtime);
+    const filePath = await createImportFile({
+      prod: {
+        api_auth_token: 'auth-prod',
+        api_key: 'api-prod'
+      }
+    });
+
+    await store.upsertProfile('existing', {
+      api_key: 'api-existing',
+      auth_token: 'auth-existing',
+      default_project_id: '12345',
+      default_location: 'Delhi'
+    });
+    const initialConfig = await store.read();
+
+    await expect(
+      program.parseAsync([
+        'node',
+        'e2ectl',
+        'config',
+        'import',
+        '--file',
+        filePath,
+        '--default',
+        '   ',
+        '--no-input'
+      ])
+    ).rejects.toThrow(/Default alias cannot be empty/i);
+
+    await expect(store.read()).resolves.toEqual(initialConfig);
+  });
+
+  it('leaves the saved config unchanged when import validation fails', async () => {
+    const { runtime, store, validator } = createRuntimeFixture();
+    const program = createProgram(runtime);
+    const filePath = await createImportFile({
+      prod: {
+        api_auth_token: 'auth-prod',
+        api_key: 'api-prod'
+      },
+      staging: {
+        api_auth_token: 'auth-staging',
+        api_key: 'api-staging'
+      }
+    });
+
+    await store.upsertProfile('existing', {
+      api_key: 'api-existing',
+      auth_token: 'auth-existing',
+      default_project_id: '12345',
+      default_location: 'Delhi'
+    });
+    const initialConfig = await store.read();
+
+    vi.spyOn(validator, 'validate').mockImplementation((profile) => {
+      validator.calls.push(profile);
+      if (profile.api_key === 'api-staging') {
+        throw new Error('Credentials rejected');
+      }
+
+      return Promise.resolve({
+        valid: true
+      });
+    });
+
+    await expect(
+      program.parseAsync([
+        'node',
+        'e2ectl',
+        'config',
+        'import',
+        '--file',
+        filePath,
+        '--no-input'
+      ])
+    ).rejects.toThrow(/Credentials rejected/i);
+
+    expect(validator.calls).toEqual([
+      {
+        api_key: 'api-prod',
+        auth_token: 'auth-prod'
+      },
+      {
+        api_key: 'api-staging',
+        auth_token: 'auth-staging'
+      }
+    ]);
+    await expect(store.read()).resolves.toEqual(initialConfig);
   });
 });
