@@ -5,6 +5,10 @@ import { ConfigStore } from '../../../src/config/store.js';
 import type { NodeClient, NodeCreateRequest } from '../../../src/node/index.js';
 import { createTestConfigPath, MemoryWriter } from '../../helpers/runtime.js';
 
+function toJsonOutput(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
 function createNodeClientStub() {
   const listNodes = vi.fn(() =>
     Promise.resolve({
@@ -204,8 +208,24 @@ describe('node commands', () => {
       project_id: '12345',
       location: 'Delhi'
     });
-    expect(stdout.buffer).toContain('"action": "list"');
-    expect(stdout.buffer).toContain('"name": "node-a"');
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'list',
+        nodes: [
+          {
+            id: 101,
+            is_locked: false,
+            name: 'node-a',
+            plan: 'C3.8GB',
+            private_ip_address: '10.0.0.1',
+            public_ip_address: '1.1.1.1',
+            status: 'Running'
+          }
+        ],
+        total_count: 1,
+        total_page_number: 1
+      })
+    );
   });
 
   it('applies per-command project and location overrides', async () => {
@@ -251,6 +271,42 @@ describe('node commands', () => {
     expect(stdout.buffer).toContain('ID: 101');
     expect(stdout.buffer).toContain('Name: node-a');
     expect(stdout.buffer).toContain('Status: Running');
+  });
+
+  it('gets a node in deterministic json mode', async () => {
+    const { runtime, stdout } = createRuntimeFixture();
+    await seedProfile(runtime);
+    const program = createProgram(runtime);
+
+    await program.parseAsync([
+      'node',
+      'e2ectl',
+      '--json',
+      'node',
+      'get',
+      '101',
+      '--alias',
+      'prod'
+    ]);
+
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'get',
+        node: {
+          created_at: '2026-03-11T10:00:00Z',
+          disk: '100 GB',
+          id: 101,
+          location: 'Delhi',
+          memory: '8 GB',
+          name: 'node-a',
+          plan: 'C3.8GB',
+          private_ip_address: '10.0.0.1',
+          public_ip_address: '1.1.1.1',
+          status: 'Running',
+          vcpus: '4'
+        }
+      })
+    );
   });
 
   it('creates a public-node request that stays compatible with backend serializer defaults', async () => {
@@ -301,8 +357,25 @@ describe('node commands', () => {
     expect(request).not.toHaveProperty('is_encryption_required');
     expect(request).not.toHaveProperty('isEncryptionEnabled');
     expect(request).not.toHaveProperty('saved_image_template_id');
-    expect(stdout.buffer).toContain('"action": "create"');
-    expect(stdout.buffer).toContain('"created": 1');
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'create',
+        created: 1,
+        nodes: [
+          {
+            created_at: '2026-03-11T10:00:00Z',
+            id: 205,
+            location: 'Delhi',
+            name: 'new-node',
+            plan: 'C3.8GB',
+            private_ip_address: '10.0.0.2',
+            public_ip_address: '1.1.1.2',
+            status: 'Creating'
+          }
+        ],
+        requested: 1
+      })
+    );
   });
 
   it('lists OS catalog rows in deterministic json mode', async () => {
@@ -321,9 +394,21 @@ describe('node commands', () => {
       'prod'
     ]);
 
-    expect(stdout.buffer).toContain('"action": "catalog-os"');
-    expect(stdout.buffer).toContain('"display_category": "Linux Virtual Node"');
-    expect(stdout.buffer).toContain('"os_version": "24.04"');
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'catalog-os',
+        entries: [
+          {
+            category: 'Ubuntu',
+            display_category: 'Linux Virtual Node',
+            number_of_domains: null,
+            os: 'Ubuntu',
+            os_version: '24.04',
+            software_version: ''
+          }
+        ]
+      })
+    );
   });
 
   it('lists valid plan and image pairs for a selected catalog row', async () => {
@@ -356,10 +441,40 @@ describe('node commands', () => {
       os: 'Ubuntu',
       osversion: '24.04'
     });
-    expect(stdout.buffer).toContain('"action": "catalog-plans"');
-    expect(stdout.buffer).toContain('"image": "Ubuntu-24.04-Distro"');
-    expect(stdout.buffer).toContain(
-      '"plan": "C3-4vCPU-8RAM-100DISK-C3.8GB-Ubuntu-24.04-Delhi"'
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'catalog-plans',
+        plans: [
+          {
+            available_inventory_status: true,
+            currency: 'INR',
+            image: 'Ubuntu-24.04-Distro',
+            location: 'Delhi',
+            name: 'C3.8GB',
+            os: {
+              category: 'Ubuntu',
+              image: 'Ubuntu-24.04-Distro',
+              name: 'Ubuntu',
+              version: '24.04'
+            },
+            plan: 'C3-4vCPU-8RAM-100DISK-C3.8GB-Ubuntu-24.04-Delhi',
+            specs: {
+              cpu: 4,
+              disk_space: 100,
+              price_per_month: 2263,
+              ram: '8.00',
+              series: 'C3',
+              sku_name: 'C3.8GB'
+            }
+          }
+        ],
+        query: {
+          category: 'Ubuntu',
+          display_category: 'Linux Virtual Node',
+          os: 'Ubuntu',
+          osversion: '24.04'
+        }
+      })
     );
   });
 
@@ -386,7 +501,13 @@ describe('node commands', () => {
       'Delete node 101? This cannot be undone.'
     );
     expect(stub.deleteNode).not.toHaveBeenCalled();
-    expect(stdout.buffer).toContain('"cancelled": true');
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'delete',
+        cancelled: true,
+        node_id: 101
+      })
+    );
   });
 
   it('requires force outside an interactive terminal', async () => {
@@ -431,7 +552,14 @@ describe('node commands', () => {
 
     expect(confirm).not.toHaveBeenCalled();
     expect(stub.deleteNode).toHaveBeenCalledWith('101');
-    expect(stdout.buffer).toContain('"cancelled": false');
+    expect(stdout.buffer).toBe(
+      toJsonOutput({
+        action: 'delete',
+        cancelled: false,
+        message: 'Success',
+        node_id: 101
+      })
+    );
   });
 
   it('rejects non-numeric node identifiers', async () => {

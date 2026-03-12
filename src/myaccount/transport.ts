@@ -5,6 +5,8 @@ import type {
   ApiClientOptions,
   ApiEnvelope,
   ApiRequestOptions,
+  ApiResponseParser,
+  FetchLikeResponse,
   FetchLike
 } from './types.js';
 
@@ -12,20 +14,20 @@ const DEFAULT_BASE_URL = 'https://api.e2enetworks.com/myaccount/api/v1';
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 export interface MyAccountTransport {
-  delete<TResponse extends ApiEnvelope<unknown>>(
+  delete<TResponse = ApiEnvelope<unknown>>(
     path: string,
-    options?: Omit<ApiRequestOptions, 'method' | 'path'>
+    options?: Omit<ApiRequestOptions<TResponse>, 'method' | 'path'>
   ): Promise<TResponse>;
-  get<TResponse extends ApiEnvelope<unknown>>(
+  get<TResponse = ApiEnvelope<unknown>>(
     path: string,
-    options?: Omit<ApiRequestOptions, 'method' | 'path'>
+    options?: Omit<ApiRequestOptions<TResponse>, 'method' | 'path'>
   ): Promise<TResponse>;
-  post<TResponse extends ApiEnvelope<unknown>>(
+  post<TResponse = ApiEnvelope<unknown>>(
     path: string,
-    options?: Omit<ApiRequestOptions, 'method' | 'path'>
+    options?: Omit<ApiRequestOptions<TResponse>, 'method' | 'path'>
   ): Promise<TResponse>;
-  request<TResponse extends ApiEnvelope<unknown>>(
-    options: ApiRequestOptions
+  request<TResponse = ApiEnvelope<unknown>>(
+    options: ApiRequestOptions<TResponse>
   ): Promise<TResponse>;
 }
 
@@ -45,9 +47,9 @@ export class MyAccountApiTransport implements MyAccountTransport {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
-  async get<TResponse extends ApiEnvelope<unknown>>(
+  async get<TResponse = ApiEnvelope<unknown>>(
     path: string,
-    options: Omit<ApiRequestOptions, 'method' | 'path'> = {}
+    options: Omit<ApiRequestOptions<TResponse>, 'method' | 'path'> = {}
   ): Promise<TResponse> {
     return this.request<TResponse>({
       ...options,
@@ -56,9 +58,9 @@ export class MyAccountApiTransport implements MyAccountTransport {
     });
   }
 
-  async post<TResponse extends ApiEnvelope<unknown>>(
+  async post<TResponse = ApiEnvelope<unknown>>(
     path: string,
-    options: Omit<ApiRequestOptions, 'method' | 'path'> = {}
+    options: Omit<ApiRequestOptions<TResponse>, 'method' | 'path'> = {}
   ): Promise<TResponse> {
     return this.request<TResponse>({
       ...options,
@@ -67,9 +69,9 @@ export class MyAccountApiTransport implements MyAccountTransport {
     });
   }
 
-  async delete<TResponse extends ApiEnvelope<unknown>>(
+  async delete<TResponse = ApiEnvelope<unknown>>(
     path: string,
-    options: Omit<ApiRequestOptions, 'method' | 'path'> = {}
+    options: Omit<ApiRequestOptions<TResponse>, 'method' | 'path'> = {}
   ): Promise<TResponse> {
     return this.request<TResponse>({
       ...options,
@@ -78,8 +80,8 @@ export class MyAccountApiTransport implements MyAccountTransport {
     });
   }
 
-  async request<TResponse extends ApiEnvelope<unknown>>(
-    options: ApiRequestOptions
+  async request<TResponse = ApiEnvelope<unknown>>(
+    options: ApiRequestOptions<TResponse>
   ): Promise<TResponse> {
     const controller = new AbortController();
     const timeout = setTimeout(() => {
@@ -100,53 +102,36 @@ export class MyAccountApiTransport implements MyAccountTransport {
 
       const { parseError, payload, preview } =
         await parseResponseBody(response);
-      if (!isApiEnvelope(payload)) {
-        const fallbackApiError = buildFallbackApiError({
-          path: options.path,
-          payload,
-          response,
-          ...(parseError === undefined ? {} : { parseError }),
-          ...(preview === undefined ? {} : { preview })
-        });
-        if (fallbackApiError !== undefined) {
-          throw fallbackApiError;
-        }
+      const parsedResponse = {
+        path: options.path,
+        payload,
+        response,
+        ...(parseError === undefined ? {} : { parseError }),
+        ...(preview === undefined ? {} : { preview })
+      };
+      const fallbackApiError = buildFallbackApiError(parsedResponse);
+      if (fallbackApiError !== undefined) {
+        throw fallbackApiError;
+      }
 
+      if (options.parseResponse !== undefined) {
+        return parseCustomSuccessResponse(
+          parsedResponse,
+          options.parseResponse
+        );
+      }
+
+      if (!isApiEnvelope(payload)) {
         throw new CliError(
           'The MyAccount API returned an unexpected response shape.',
           {
             code: 'INVALID_API_RESPONSE',
-            details: buildInvalidResponseDetails({
-              path: options.path,
-              response,
-              ...(parseError === undefined ? {} : { parseError }),
-              ...(preview === undefined ? {} : { preview })
-            }),
+            details: buildInvalidResponseDetails(parsedResponse),
             exitCode: EXIT_CODES.network,
             suggestion:
               'Retry the command and inspect the API response if the issue persists.'
           }
         );
-      }
-
-      if (!response.ok || payload.code >= 400) {
-        throw new CliError(`MyAccount API request failed: ${payload.message}`, {
-          code: 'API_REQUEST_FAILED',
-          details: [
-            `HTTP status: ${response.status} ${response.statusText}`,
-            `API code: ${payload.code}`,
-            `Path: ${options.path}`,
-            `Errors: ${JSON.stringify(payload.errors)}`
-          ],
-          exitCode:
-            response.status === 401 || response.status === 403
-              ? EXIT_CODES.auth
-              : EXIT_CODES.network,
-          suggestion:
-            response.status === 401 || response.status === 403
-              ? 'Verify the saved token and API key, then run the command again.'
-              : 'Check the request inputs and try again.'
-        });
       }
 
       return payload as TResponse;
@@ -195,7 +180,7 @@ export class MyAccountApiTransport implements MyAccountTransport {
     };
   }
 
-  private buildUrl(options: ApiRequestOptions): string {
+  private buildUrl<TResponse>(options: ApiRequestOptions<TResponse>): string {
     const url = new URL(normalizePath(options.path), this.baseUrl);
     url.searchParams.set('apikey', this.credentials.api_key);
 
@@ -250,7 +235,7 @@ interface ParsedResponseBody {
 
 interface FallbackApiErrorInput extends ParsedResponseBody {
   path: string;
-  response: Awaited<ReturnType<FetchLike>>;
+  response: FetchLikeResponse;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -268,7 +253,7 @@ function isApiEnvelope(value: unknown): value is ApiEnvelope<unknown> {
 }
 
 async function parseResponseBody(
-  response: Awaited<ReturnType<FetchLike>>
+  response: FetchLikeResponse
 ): Promise<ParsedResponseBody> {
   if (typeof response.text === 'function') {
     const rawBody = await response.text();
@@ -300,6 +285,31 @@ async function parseResponseBody(
     return {
       ...(error instanceof Error ? { parseError: error } : {})
     };
+  }
+}
+
+function parseCustomSuccessResponse<TResponse>(
+  input: FallbackApiErrorInput,
+  parseResponse: ApiResponseParser<TResponse>
+): TResponse {
+  try {
+    return parseResponse(input.payload);
+  } catch (error: unknown) {
+    const details = buildInvalidResponseDetails(input);
+    if (error instanceof Error) {
+      details.push(`Reason: ${error.message}`);
+    }
+
+    throw new CliError(
+      'The MyAccount API returned an unexpected response shape.',
+      {
+        code: 'INVALID_API_RESPONSE',
+        details,
+        exitCode: EXIT_CODES.network,
+        suggestion:
+          'Retry the command and inspect the API response if the issue persists.'
+      }
+    );
   }
 }
 

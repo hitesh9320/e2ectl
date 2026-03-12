@@ -11,6 +11,8 @@ export type {
   ApiEnvelope,
   ApiErrorValue,
   ApiRequestOptions,
+  ApiResponseParser,
   ApiResponse,
-  FetchLike
+  FetchLike,
+  FetchLikeResponse
 } from './types.js';

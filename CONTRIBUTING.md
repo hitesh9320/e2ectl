@@ -5,6 +5,21 @@
 - Node.js 18+
 - npm
 
+## Start Here
+
+Before changing code:
+
+1. Read [README.md](./README.md) for the operator-facing workflow.
+2. Read [docs/MAINTAINING.md](./docs/MAINTAINING.md) for CI and maintenance expectations.
+3. Run the local gate:
+
+```bash
+npm install
+make lint
+make test
+make build
+```
+
 ## Local Workflow
 
 ```bash
@@ -19,6 +34,7 @@ Useful commands:
 ```bash
 make dev
 npm run test:manual
+node dist/app/index.js --help
 ```
 
 ## Architecture Contract
@@ -77,10 +93,23 @@ src/
 - Services orchestrate validation, confirmation, defaults, and auth/context resolution. They should not print output or manually serialize JSON.
 - Service clients own endpoint paths and success-shape parsing. They return typed data to services.
 - Formatters own both human-readable rendering and deterministic `--json` rendering.
+- Keep Commander usage-error normalization centralized at the app boundary so CLI usage failures follow the same error contract as service/domain failures.
 - `src/myaccount/transport.ts` owns generic HTTP execution and generic API failure handling. Do not duplicate backend error translation in `node/client.ts` or future service clients.
+- If a future endpoint returns a different success body, add a transport-level response parser instead of re-implementing auth, timeout, or API failure handling in the domain client.
 - Deterministic `--json` output is a compatibility contract. Review key order, field names, null handling, and sorting before merging changes.
 - Import across domains only via that domain's `index.ts`. Do not reach into another domain's internal files.
 - Do not introduce placeholder abstractions. If a file or type does not serve the current v1 scope, do not add it.
+
+### Adding A New Domain
+
+For new services such as `volume` or `vpc`, keep the existing domain shape:
+
+- `src/<domain>/command.ts` for CLI surface only
+- `src/<domain>/service.ts` for workflow orchestration
+- `src/<domain>/client.ts` for endpoint paths and success parsing
+- `src/<domain>/formatter.ts` for human and deterministic JSON output
+
+Reuse `config/resolver.ts` for credential/context resolution and keep shared MyAccount request execution inside `src/myaccount/transport.ts`.
 
 ## Verification Contract
 
@@ -98,6 +127,7 @@ Every user-visible behavior change requires:
 - unit tests
 - docs updates
 - deterministic `--json` output review
+- verification that README examples still match the real CLI help surface when you touch commands or flags
 
 This includes command help text, prompt/confirmation flow, error wording that operators rely on, and machine-facing JSON fields.
 
@@ -112,6 +142,8 @@ This includes command help text, prompt/confirmation flow, error wording that op
   - `tests/unit/config/`
   - `tests/unit/node/`
 - `tests/unit/myaccount/` covers transport behavior, request construction, and centralized error handling.
+- `tests/unit/app/` covers CLI entrypoint behavior such as usage-error normalization and exit paths.
+- `tests/unit/config/` covers secure and atomic config persistence in addition to command behavior.
 - `tests/unit/node/` covers node client endpoint parsing plus command/service behavior such as defaults, prompts, and output.
 
 ## Manual API Checks
@@ -142,6 +174,7 @@ The default manual suite verifies:
 - Keep changes scoped and reviewable.
 - Update docs when command behavior, operator flow, architecture rules, or CI expectations change.
 - Keep JSON output deterministic for automation.
+- When touching install, config, auth, or node-read flows, verify the first-time operator path from a clean temp `HOME` before merging.
 - Prefer the boring solution over introducing new layers.
 
 ## CI Triggers

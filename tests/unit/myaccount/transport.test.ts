@@ -299,6 +299,42 @@ describe('MyAccountApiTransport', () => {
       })
     ).rejects.toThrow(/could not be completed/i);
   });
+
+  it('supports endpoint-specific success parsing for future non-envelope domains', async () => {
+    const transport = new MyAccountApiTransport(credentials, {
+      fetchFn: () =>
+        Promise.resolve(
+          createFetchResponse({
+            items: [
+              {
+                id: 'vol-1',
+                name: 'primary-volume'
+              }
+            ]
+          })
+        )
+    });
+
+    const result = await transport.get<Array<{ id: string; name: string }>>(
+      '/volumes/',
+      {
+        parseResponse: (payload) => {
+          if (!isRecord(payload) || !isNamedItemArray(payload.items)) {
+            throw new Error('Expected an items array with id/name entries.');
+          }
+
+          return payload.items;
+        }
+      }
+    );
+
+    expect(result).toEqual([
+      {
+        id: 'vol-1',
+        name: 'primary-volume'
+      }
+    ]);
+  });
 });
 
 function envelope<TData>(
@@ -324,4 +360,22 @@ function createFetchResponse(
     json: overrides.json ?? (() => Promise.resolve(payload)),
     ...(overrides.text === undefined ? {} : { text: overrides.text })
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isNamedItemArray(
+  value: unknown
+): value is Array<{ id: string; name: string }> {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        isRecord(item) &&
+        typeof item.id === 'string' &&
+        typeof item.name === 'string'
+    )
+  );
 }

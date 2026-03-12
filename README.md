@@ -1,6 +1,6 @@
 # e2ectl
 
-`e2ectl` is an OSS CLI for managing E2E Networks MyAccount resources from the terminal.
+`e2ectl` is an OSS CLI for managing E2E Networks MyAccount resources from the terminal. The current `main` branch is a production-oriented v1 for profile management, node discovery, and node lifecycle commands.
 
 Current v1 scope:
 
@@ -15,30 +15,74 @@ Current v1 scope:
 - Node.js 18+
 - npm
 
-## Install And Run
+## Install From Source
+
+Until public package distribution is added, install `e2ectl` from this repository:
 
 ```bash
 npm install
-make dev
-```
-
-For a production build:
-
-```bash
-make build
-node dist/app/index.js --help
-```
-
-To install the CLI command locally:
-
-```bash
 make build
 npm link
 e2ectl --help
 ```
 
+For development-only execution without linking:
+
+```bash
+make dev
+```
+
 For architecture and contribution rules, use [CONTRIBUTING.md](./CONTRIBUTING.md).
 For CI and maintenance expectations, use [docs/MAINTAINING.md](./docs/MAINTAINING.md).
+
+## First-Time Setup
+
+The fastest operator workflow is:
+
+1. import a downloaded MyAccount credential file
+2. save a default alias, project id, and location
+3. use the node catalog commands to discover valid create inputs
+4. create or inspect nodes
+
+Import one or more aliases from a downloaded credential file:
+
+```bash
+e2ectl config import --file ~/Downloads/config.json
+```
+
+In an interactive terminal, `e2ectl` can prompt for:
+
+- a default project id to save on every imported alias
+- a default location to save on every imported alias
+- a default alias, but only when the config does not already have one
+
+For automation or CI-style setup, pass the defaults explicitly and disable prompts:
+
+```bash
+e2ectl config import \
+  --file ~/Downloads/config.json \
+  --default prod \
+  --default-project-id 46429 \
+  --default-location Delhi \
+  --no-input
+```
+
+Inspect what was saved:
+
+```bash
+e2ectl config list
+e2ectl config list --json
+```
+
+If you want to change defaults later:
+
+```bash
+e2ectl config set-default --alias prod
+e2ectl config set-context \
+  --alias prod \
+  --default-project-id 46429 \
+  --default-location Delhi
+```
 
 ## Configuration And Auth
 
@@ -85,20 +129,7 @@ e2ectl config add \
 
 The API key and bearer token are validated before the profile is saved. The default project and location are optional per-alias defaults, not part of the auth identity.
 
-Import one or more aliases from a downloaded credential file:
-
-```bash
-e2ectl config import --file ~/Downloads/config.json
-```
-
 `e2ectl` reads aliases, API keys, and bearer tokens from the file, can optionally prompt for a default project id and default location to apply to the imported aliases, validates every imported alias, prints a success summary, and then offers to set a default alias if the config does not already have one.
-
-Set a saved profile as the default alias:
-
-```bash
-e2ectl config set-default --alias prod
-e2ectl config list
-```
 
 After that, `node` commands can omit `--alias`. You can also update alias defaults later:
 
@@ -108,6 +139,46 @@ e2ectl config set-context \
   --default-project-id 46429 \
   --default-location Delhi
 ```
+
+## Create Your First Node
+
+`node create` expects an exact plan and image pair from the MyAccount catalog. The intended workflow is discovery first, creation second.
+
+1. List valid OS catalog rows:
+
+```bash
+e2ectl node catalog os --alias prod
+```
+
+2. Choose one row and use its exact values with `node catalog plans`:
+
+```bash
+e2ectl node catalog plans \
+  --alias prod \
+  --display-category "Linux Virtual Node" \
+  --category Ubuntu \
+  --os Ubuntu \
+  --os-version 24.04
+```
+
+3. Copy the exact `plan` and `image` values from that output into `node create`:
+
+```bash
+e2ectl node create \
+  --alias prod \
+  --name demo-node \
+  --plan <exact-plan-from-catalog> \
+  --image <exact-image-from-catalog>
+```
+
+4. Inspect the result:
+
+```bash
+e2ectl node list --alias prod
+e2ectl node get <node-id> --alias prod
+```
+
+If the selected alias already has a saved project id and location, later node commands can omit `--project-id` and `--location`. For scripting, add `--json` at any step and treat that output as a compatibility contract.
 
 ## Command Surface
 
@@ -166,6 +237,9 @@ For `node catalog os`, the human table hides the `Software Version` column when 
 - Human-readable output is the default.
 - `--json` emits deterministic JSON for agents and scripts.
 - `config list` masks stored secrets in compact form such as `****e39d`.
+- Saved credentials are written to `~/.e2e/` with restrictive directory and file permissions.
+- `config import` validates alias/default state before writing, so failed imports do not partially persist.
+- Blank aliases are rejected before validation or persistence.
 - `node delete` prompts for confirmation unless `--force` is supplied.
 - MyAccount API requests use bearer auth plus required query parameters on every call.
 - API failures are handled centrally in the MyAccount client, with simple fallbacks for inconsistent backend error shapes such as `message`, `detail`, and non-JSON failure bodies.

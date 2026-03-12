@@ -1,24 +1,53 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Command, CommanderError } from 'commander';
 
-import { formatError, isCliError } from '../core/errors.js';
+import {
+  CliError,
+  EXIT_CODES,
+  formatError,
+  isCliError
+} from '../core/errors.js';
 import { createProgram } from './program.js';
-import { createRuntime } from './runtime.js';
+import {
+  createRuntime,
+  type CliRuntime,
+  type OutputWriter
+} from './runtime.js';
 
 async function main(): Promise<void> {
-  const program = createProgram(createRuntime());
-
-  try {
-    await program.parseAsync(process.argv);
-  } catch (error: unknown) {
-    process.stderr.write(formatError(error));
-    process.exitCode = isCliError(error) ? error.exitCode : 1;
-  }
+  process.exitCode = await runCli(process.argv);
 }
 
 if (isMainModule()) {
   void main();
+}
+
+export async function runCli(
+  argv: string[],
+  runtime: CliRuntime = createRuntime(),
+  stderr: OutputWriter = process.stderr
+): Promise<number> {
+  const program = createProgram(runtime);
+  prepareProgramForCli(program);
+
+  try {
+    await program.parseAsync(argv);
+    return EXIT_CODES.success;
+  } catch (error: unknown) {
+    if (isCommanderSuccessExit(error)) {
+      return EXIT_CODES.success;
+    }
+
+    const normalizedError = normalizeCliExecutionError(error);
+    stderr.write(formatError(normalizedError));
+
+    return isCliError(normalizedError)
+      ? normalizedError.exitCode
+      : EXIT_CODES.general;
+  }
 }
 
 function isMainModule(): boolean {
@@ -26,8 +55,74 @@ function isMainModule(): boolean {
 
   return (
     entrypoint !== undefined &&
-    path.resolve(entrypoint) === fileURLToPath(import.meta.url)
+    pathsReferToSameFile(entrypoint, fileURLToPath(import.meta.url))
   );
+}
+
+export function pathsReferToSameFile(
+  leftPath: string,
+  rightPath: string
+): boolean {
+  return (
+    resolvePathForMainCheck(leftPath) === resolvePathForMainCheck(rightPath)
+  );
+}
+
+function prepareProgramForCli(program: Command): void {
+  program.configureOutput({
+    outputError: () => {},
+    writeErr: () => {}
+  });
+  program.exitOverride();
+
+  for (const command of program.commands) {
+    prepareProgramForCli(command);
+  }
+}
+
+function isCommanderSuccessExit(error: unknown): error is CommanderError {
+  return (
+    error instanceof CommanderError &&
+    (error.code === 'commander.helpDisplayed' ||
+      error.code === 'commander.version')
+  );
+}
+
+function normalizeCliExecutionError(error: unknown): unknown {
+  if (error instanceof CommanderError) {
+    return commanderErrorToCliError(error);
+  }
+
+  return error;
+}
+
+function commanderErrorToCliError(error: CommanderError): CliError {
+  const [firstLine = 'Invalid command usage.', ...remainingLines] =
+    error.message
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+  return new CliError(stripCommanderErrorPrefix(firstLine), {
+    code: 'INVALID_USAGE',
+    ...(remainingLines.length === 0 ? {} : { details: remainingLines }),
+    exitCode: EXIT_CODES.usage,
+    suggestion: 'Run the command again with --help for usage.'
+  });
+}
+
+function stripCommanderErrorPrefix(message: string): string {
+  return message.replace(/^error:\s*/i, '');
+}
+
+function resolvePathForMainCheck(filePath: string): string {
+  const absolutePath = path.resolve(filePath);
+
+  try {
+    return realpathSync(absolutePath);
+  } catch {
+    return absolutePath;
+  }
 }
 
 export { createProgram } from './program.js';

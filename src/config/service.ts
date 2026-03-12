@@ -119,7 +119,11 @@ export class ConfigService {
       options.defaultLocation
     );
 
-    const alias = options.alias.trim();
+    const alias = normalizeRequiredAlias(
+      options.alias,
+      'Profile alias',
+      '--alias'
+    );
     const profile = buildProfileFromOptions(options);
 
     await this.dependencies.credentialValidator.validate(profile);
@@ -135,7 +139,11 @@ export class ConfigService {
   async importProfiles(
     options: ImportProfilesInput
   ): Promise<ConfigImportedCommandResult> {
-    const filePath = options.file.trim();
+    const filePath = normalizeRequiredString(
+      options.file,
+      'Import file path',
+      '--file'
+    );
     const importedSecrets = await readImportedProfiles(filePath);
     const importedAliases = Object.keys(importedSecrets).sort((left, right) =>
       left.localeCompare(right)
@@ -181,36 +189,32 @@ export class ConfigService {
       options,
       canPrompt
     );
-    const nextProfiles = {
-      ...currentConfig.profiles,
-      ...applyImportedDefaults(importedProfiles, importedDefaults)
-    };
-    const nextConfig: ConfigFile =
-      currentConfig.default === undefined
-        ? {
-            profiles: nextProfiles
-          }
-        : {
-            profiles: nextProfiles,
-            default: currentConfig.default
-          };
-
-    await this.dependencies.store.write(nextConfig);
-
     const defaultAlias = await this.resolveImportedDefaultAlias(
       options,
       canPrompt,
       currentConfig,
       importedAliases
     );
-    const config =
-      defaultAlias === undefined
-        ? await this.dependencies.store.read()
-        : await this.dependencies.store.setDefault(defaultAlias);
+    const nextProfiles = {
+      ...currentConfig.profiles,
+      ...applyImportedDefaults(importedProfiles, importedDefaults)
+    };
+    const nextDefault = defaultAlias ?? currentConfig.default;
+    const nextConfig: ConfigFile =
+      nextDefault === undefined
+        ? {
+            profiles: nextProfiles
+          }
+        : {
+            profiles: nextProfiles,
+            default: nextDefault
+          };
+
+    await this.dependencies.store.write(nextConfig);
 
     return {
       action: 'imported',
-      config,
+      config: await this.dependencies.store.read(),
       filePath,
       importedAliases,
       importedDefaults,
@@ -228,7 +232,11 @@ export class ConfigService {
   async removeProfile(
     options: RemoveProfileInput
   ): Promise<ConfigRemovedCommandResult> {
-    const alias = options.alias.trim();
+    const alias = normalizeRequiredAlias(
+      options.alias,
+      'Profile alias',
+      '--alias'
+    );
 
     await this.assertProfileExists(alias);
 
@@ -242,7 +250,11 @@ export class ConfigService {
   async setContext(
     options: SetContextInput
   ): Promise<ConfigSetContextCommandResult> {
-    const alias = options.alias.trim();
+    const alias = normalizeRequiredAlias(
+      options.alias,
+      'Profile alias',
+      '--alias'
+    );
     const defaultProjectId = normalizeOptionalString(options.defaultProjectId);
     const defaultLocation = normalizeOptionalString(options.defaultLocation);
 
@@ -267,7 +279,11 @@ export class ConfigService {
   async setDefault(
     options: SetDefaultInput
   ): Promise<ConfigSetDefaultCommandResult> {
-    const alias = options.alias.trim();
+    const alias = normalizeRequiredAlias(
+      options.alias,
+      'Profile alias',
+      '--alias'
+    );
 
     await this.assertProfileExists(alias);
 
@@ -345,7 +361,11 @@ export class ConfigService {
     importedAliases: string[]
   ): Promise<string | undefined> {
     if (options.default !== undefined) {
-      const defaultAlias = options.default.trim();
+      const defaultAlias = normalizeRequiredAlias(
+        options.default,
+        'Default alias',
+        '--default'
+      );
       if (!importedAliases.includes(defaultAlias)) {
         throw new CliError(
           `Default alias "${defaultAlias}" was not part of this import.`,
@@ -539,6 +559,31 @@ function normalizeOptionalString(value?: string): string | undefined {
 
   const normalized = value.trim();
   return normalized.length === 0 ? undefined : normalized;
+}
+
+function normalizeRequiredAlias(
+  value: string,
+  label: string,
+  flag: string
+): string {
+  return normalizeRequiredString(value, label, flag);
+}
+
+function normalizeRequiredString(
+  value: string,
+  label: string,
+  flag: string
+): string {
+  const normalized = value.trim();
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  throw new CliError(`${label} cannot be empty.`, {
+    code: 'EMPTY_REQUIRED_VALUE',
+    exitCode: EXIT_CODES.usage,
+    suggestion: `Pass a non-empty value with ${flag}.`
+  });
 }
 
 function validateOptionalContextDefaults(
