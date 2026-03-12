@@ -1,4 +1,4 @@
-import { CliError, EXIT_CODES } from '../../../src/core/errors.js';
+import { EXIT_CODES } from '../../../src/core/errors.js';
 import { MyAccountApiClient } from '../../../src/myaccount/client.js';
 
 describe('MyAccountApiClient', () => {
@@ -377,8 +377,26 @@ describe('MyAccountApiClient', () => {
         })
     });
 
-    await expect(client.validateCredentials()).rejects.toBeInstanceOf(CliError);
-    await expect(client.validateCredentials()).rejects.toThrow(/Unauthorized/);
+    await expect(client.validateCredentials()).rejects.toMatchObject({
+      code: 'API_REQUEST_FAILED',
+      exitCode: EXIT_CODES.auth,
+      message: 'MyAccount API request failed: Unauthorized',
+      json: {
+        code: 'API_REQUEST_FAILED',
+        exit_code: EXIT_CODES.auth,
+        http_status: 200,
+        http_status_text: 'OK',
+        message: 'MyAccount API request failed: Unauthorized',
+        backend_payload: {
+          code: 401,
+          data: {},
+          errors: {
+            auth: ['invalid']
+          },
+          message: 'Unauthorized'
+        }
+      }
+    });
   });
 
   it('treats string-shaped api errors as actionable api failures', async () => {
@@ -424,11 +442,15 @@ describe('MyAccountApiClient', () => {
       exitCode: EXIT_CODES.auth,
       message:
         'MyAccount API request failed: Authentication credentials were not provided.',
-      metadata: {
-        api: {
-          detail: 'Authentication credentials were not provided.',
-          http_status: 401,
-          http_status_text: 'Unauthorized'
+      json: {
+        code: 'API_REQUEST_FAILED',
+        exit_code: EXIT_CODES.auth,
+        http_status: 401,
+        http_status_text: 'Unauthorized',
+        message:
+          'MyAccount API request failed: Authentication credentials were not provided.',
+        backend_payload: {
+          detail: 'Authentication credentials were not provided.'
         }
       }
     });
@@ -461,18 +483,21 @@ describe('MyAccountApiClient', () => {
       code: 'API_REQUEST_FAILED',
       exitCode: EXIT_CODES.network,
       message: 'MyAccount API request failed: Invalid state value provided',
-      metadata: {
-        api: {
-          code: 400,
+      json: {
+        code: 'API_REQUEST_FAILED',
+        exit_code: EXIT_CODES.network,
+        http_status: 200,
+        http_status_text: 'OK',
+        message: 'MyAccount API request failed: Invalid state value provided',
+        backend_payload: {
+          data: {},
           errors: {
             state: ['invalid']
           },
-          fields: {
-            request_id: 'req-123',
-            status: false,
-            status_code: '400'
-          },
-          message: 'Invalid state value provided'
+          message: 'Invalid state value provided',
+          request_id: 'req-123',
+          status: false,
+          status_code: '400'
         }
       }
     });
@@ -503,9 +528,15 @@ describe('MyAccountApiClient', () => {
     ).rejects.toMatchObject({
       code: 'API_REQUEST_FAILED',
       message: 'MyAccount API request failed: Image already exists',
-      metadata: {
-        api: {
+      json: {
+        code: 'API_REQUEST_FAILED',
+        exit_code: EXIT_CODES.network,
+        http_status: 200,
+        http_status_text: 'OK',
+        message: 'MyAccount API request failed: Image already exists',
+        backend_payload: {
           code: 200,
+          data: {},
           errors: true,
           message: 'Image already exists'
         }
@@ -527,9 +558,21 @@ describe('MyAccountApiClient', () => {
         })
     });
 
-    await expect(client.validateCredentials()).rejects.toThrow(
-      /unexpected response shape/i
-    );
+    await expect(client.validateCredentials()).rejects.toMatchObject({
+      code: 'INVALID_API_RESPONSE',
+      exitCode: EXIT_CODES.network,
+      message: 'The MyAccount API returned an unexpected response shape.',
+      json: {
+        code: 'INVALID_API_RESPONSE',
+        exit_code: EXIT_CODES.network,
+        http_status: 200,
+        http_status_text: 'OK',
+        message: 'The MyAccount API returned an unexpected response shape.',
+        backend_payload: {
+          message: 'missing fields'
+        }
+      }
+    });
   });
 
   it('surfaces malformed non-json bodies without swallowing the response preview', async () => {
@@ -548,11 +591,13 @@ describe('MyAccountApiClient', () => {
       code: 'INVALID_API_RESPONSE',
       exitCode: EXIT_CODES.network,
       message: 'The MyAccount API returned a non-JSON or malformed response.',
-      metadata: {
-        api: {
-          http_status: 502,
-          response_body_preview: '<html>gateway failed</html>'
-        }
+      json: {
+        code: 'INVALID_API_RESPONSE',
+        exit_code: EXIT_CODES.network,
+        http_status: 502,
+        http_status_text: 'Bad Gateway',
+        message: 'The MyAccount API returned a non-JSON or malformed response.',
+        raw_body_preview: '<html>gateway failed</html>'
       }
     });
   });

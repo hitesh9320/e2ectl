@@ -99,18 +99,17 @@ This includes command help text, prompt/confirmation flow, error wording that op
 
 ## CLI Error Contract
 
-- `--json` command failures are emitted on stderr as deterministic JSON with this shape:
+- MyAccount API response failures emitted with `--json` use this deterministic wrapper on stderr:
 
 ```json
 {
   "error": {
     "code": "API_REQUEST_FAILED",
-    "message": "MyAccount API request failed: ...",
-    "details": ["HTTP status: 400 Bad Request"],
     "exit_code": 5,
-    "metadata": {},
-    "suggestion": "Check the request inputs and try again.",
-    "type": "cli"
+    "http_status": 400,
+    "http_status_text": "Bad Request",
+    "message": "MyAccount API request failed: ...",
+    "backend_payload": {}
   }
 }
 ```
@@ -118,12 +117,13 @@ This includes command help text, prompt/confirmation flow, error wording that op
 - Keep the top-level `error` object stable. Field names, null handling, and key ordering are part of the compatibility contract.
 - Preserve the existing exit-code categories. Richer backend details must not silently change `usage`, `config`, `auth`, or `network` behavior.
 
-### MyAccount Error Normalization
+### MyAccount Error Handling
 
-- Standard envelope errors: parse `{code, data, errors, message}` and surface HTTP status plus backend `code`, `message`, `errors`, `data`, and extra fields when present.
-- DRF detail errors: parse `{detail: "..."}` as the primary failure summary and treat it as backend error content when no `errors` field exists.
-- `status_code`-style errors: treat `status_code` the same as `code`, even when it is a string, and preserve extra backend fields such as `status` or `request_id`.
-- Malformed or non-JSON API responses: raise `INVALID_API_RESPONSE`, include HTTP status and path, and include a short response-body preview when available.
+- Standard envelope errors: keep the parsed backend body under `error.backend_payload` instead of repacking backend-specific fields into a second schema.
+- DRF detail errors: use `{detail: "..."}` as the human summary, but preserve the parsed body under `error.backend_payload`.
+- `status_code`-style errors: treat `status_code` the same as `code` for failure/exit-code decisions, but preserve the raw parsed body under `error.backend_payload`.
+- Malformed or non-JSON API responses: raise `INVALID_API_RESPONSE`, include HTTP status metadata, and include `error.raw_body_preview` when a response preview is available.
+- Human stderr stays concise and actionable. Raw backend bodies belong in `--json`.
 
 ## Testing Expectations
 

@@ -173,9 +173,9 @@ For `node catalog os`, the human table hides the `Software Version` column when 
 
 - Human-readable output is the default.
 - `--json` emits deterministic JSON for agents and scripts.
-- `--json` failures are emitted as deterministic JSON on stderr with the CLI error code, exit code, and any structured API metadata that was available.
+- MyAccount API failures emitted with `--json` use a stable `error` wrapper with `code`, `message`, `exit_code`, `http_status`, `http_status_text`, and either `backend_payload` or `raw_body_preview`.
 - `config list` masks stored secrets in compact form such as `****e39d`.
-- MyAccount API failures surface the HTTP status plus any backend `code`, `status_code`, `message`, `detail`, `errors`, `data`, and extra fields that were present in the response.
+- MyAccount API response failures keep the parsed backend body under `error.backend_payload` instead of flattening backend-specific fields into CLI-owned metadata.
 - `node action save-image` requires a non-empty `--name`.
 - `node action save-image` may be rejected by the backend unless the node is powered off.
 - `node delete` prompts for confirmation unless `--force` is supplied.

@@ -11,7 +11,7 @@ import type {
   NodeListResponse
 } from '../node/index.js';
 import type { ResolvedCredentials } from '../config/index.js';
-import { stableStringify, toJsonValue, type JsonValue } from '../core/json.js';
+import { toJsonValue, type JsonValue } from '../core/json.js';
 import { CliError, EXIT_CODES } from '../core/errors.js';
 
 const DEFAULT_BASE_URL = 'https://api.e2enetworks.com/myaccount/api/v1';
@@ -52,11 +52,10 @@ interface ApiResponseMetadata {
 interface ParsedApiPayload<TData> {
   apiCode: number | undefined;
   data: TData;
-  detail: string | undefined;
   errors: ApiErrorValue;
   explicitFailure: boolean;
-  extraFields: { [key: string]: JsonValue };
   message: string;
+  summary: string | undefined;
 }
 
 type FetchResponse = Awaited<ReturnType<FetchLike>>;
@@ -258,7 +257,7 @@ export class MyAccountApiClient implements MyAccountClient {
       const payload = normalizeApiPayload<TData>(rawPayload, metadata);
 
       if (isApiFailure(payload, response.ok, metadata)) {
-        throw buildApiRequestFailedError(payload, metadata);
+        throw buildApiRequestFailedError(payload, rawPayload, metadata);
       }
 
       if (isUnexpectedApiSuccessPayload(rawPayload, response.ok, metadata)) {
@@ -435,33 +434,23 @@ function normalizeApiPayload<TData>(
     return {
       apiCode: undefined,
       data: buildFallbackData<TData>(payload),
-      detail: undefined,
       errors: null,
       explicitFailure: false,
-      extraFields: {},
-      message: defaultApiMessage(metadata)
+      message: defaultApiMessage(metadata),
+      summary: undefined
     };
   }
 
   const apiCode =
     parseApiCode(payload.code) ?? parseApiCode(payload.status_code);
-  const detail = readString(payload.detail);
-  const errors = extractApiErrors(payload, detail);
 
   return {
     apiCode,
     data: extractApiData<TData>(payload, metadata, apiCode),
-    detail,
-    errors,
+    errors: extractApiErrors(payload),
     explicitFailure: hasExplicitFailureFlag(payload),
-    extraFields: extractApiExtraFields(payload),
-    message:
-      firstDefinedString(
-        readString(payload.message),
-        detail,
-        readString(payload.error_message),
-        readString(payload.error)
-      ) ?? defaultApiMessage(metadata)
+    message: readApiMessage(payload, metadata),
+    summary: summarizeApiFailure(payload, metadata)
   };
 }
 
@@ -510,39 +499,28 @@ function isApiFailure<TData>(
 
 function buildApiRequestFailedError<TData>(
   payload: ParsedApiPayload<TData>,
+  rawPayload: unknown,
   metadata: ApiResponseMetadata
 ): CliError {
   const effectiveCode = payload.apiCode ?? metadata.httpStatus;
+  const exitCode = resolveApiExitCode(metadata.httpStatus, effectiveCode);
   const summary =
-    firstDefinedString(payload.detail, payload.message) ??
+    payload.summary ??
     `${metadata.httpStatus} ${metadata.httpStatusText}`.trim();
-  const details = [
-    `HTTP status: ${metadata.httpStatus} ${metadata.httpStatusText}`.trim(),
-    ...(payload.apiCode === undefined ? [] : [`API code: ${payload.apiCode}`]),
-    ...(payload.message === summary ? [] : [`API message: ${payload.message}`]),
-    ...(payload.detail === undefined ? [] : [`API detail: ${payload.detail}`]),
-    ...formatOptionalApiValue('API errors', payload.errors),
-    ...formatOptionalApiValue('API data', payload.data),
-    ...formatOptionalApiValue('API fields', payload.extraFields),
-    `Path: ${metadata.path}`
-  ];
+  const message = `MyAccount API request failed: ${summary}`;
 
-  return new CliError(`MyAccount API request failed: ${summary}`, {
+  return new CliError(message, {
     code: 'API_REQUEST_FAILED',
-    details,
-    exitCode: resolveApiExitCode(metadata.httpStatus, effectiveCode),
-    metadata: {
-      api: {
-        code: payload.apiCode ?? null,
-        data: toJsonValue(payload.data),
-        detail: payload.detail ?? null,
-        errors: payload.errors,
-        fields: payload.extraFields,
-        http_status: metadata.httpStatus,
-        http_status_text: metadata.httpStatusText,
-        message: payload.message,
-        path: metadata.path
-      }
+    details: buildApiContextDetails(metadata),
+    exitCode,
+    json: {
+      backend_payload:
+        rawPayload === undefined ? null : toJsonValue(rawPayload),
+      code: 'API_REQUEST_FAILED',
+      exit_code: exitCode,
+      http_status: metadata.httpStatus,
+      http_status_text: metadata.httpStatusText,
+      message
     },
     suggestion: buildApiSuggestion(metadata.httpStatus, effectiveCode)
   });
@@ -552,32 +530,25 @@ function buildInvalidApiResponseError(
   metadata: ApiResponseMetadata,
   rawText: string | undefined
 ): CliError {
+  const exitCode = resolveApiExitCode(metadata.httpStatus);
+  const rawBodyPreview =
+    rawText === undefined ? undefined : previewResponseBody(rawText);
+
   return new CliError(
     'The MyAccount API returned a non-JSON or malformed response.',
     {
       code: 'INVALID_API_RESPONSE',
-      details: [
-        `HTTP status: ${metadata.httpStatus} ${metadata.httpStatusText}`.trim(),
-        `Path: ${metadata.path}`,
-        ...(rawText === undefined
-          ? []
-          : [`Response body: ${previewResponseBody(rawText)}`])
-      ],
-      exitCode: resolveApiExitCode(metadata.httpStatus),
-      metadata: {
-        api: {
-          code: null,
-          data: null,
-          detail: null,
-          errors: null,
-          fields: {},
-          http_status: metadata.httpStatus,
-          http_status_text: metadata.httpStatusText,
-          message: null,
-          path: metadata.path,
-          response_body_preview:
-            rawText === undefined ? null : previewResponseBody(rawText)
-        }
+      details: buildApiContextDetails(metadata),
+      exitCode,
+      json: {
+        code: 'INVALID_API_RESPONSE',
+        exit_code: exitCode,
+        http_status: metadata.httpStatus,
+        http_status_text: metadata.httpStatusText,
+        message: 'The MyAccount API returned a non-JSON or malformed response.',
+        ...(rawBodyPreview === undefined
+          ? {}
+          : { raw_body_preview: rawBodyPreview })
       },
       suggestion: buildApiSuggestion(metadata.httpStatus)
     }
@@ -588,31 +559,24 @@ function buildUnexpectedApiResponseError(
   metadata: ApiResponseMetadata,
   payload: unknown
 ): CliError {
+  const exitCode = resolveApiExitCode(metadata.httpStatus);
+
   return new CliError(
     'The MyAccount API returned an unexpected response shape.',
     {
       code: 'INVALID_API_RESPONSE',
-      details: [
-        `HTTP status: ${metadata.httpStatus} ${metadata.httpStatusText}`.trim(),
-        `Path: ${metadata.path}`,
-        ...formatOptionalApiValue('Response fields', payload)
-      ],
-      exitCode: resolveApiExitCode(metadata.httpStatus),
-      metadata: {
-        api: {
-          code: null,
-          data: toJsonValue(payload),
-          detail: null,
-          errors: null,
-          fields: {},
-          http_status: metadata.httpStatus,
-          http_status_text: metadata.httpStatusText,
-          message: null,
-          path: metadata.path
-        }
+      details: buildApiContextDetails(metadata),
+      exitCode,
+      json: {
+        backend_payload: payload === undefined ? null : toJsonValue(payload),
+        code: 'INVALID_API_RESPONSE',
+        exit_code: exitCode,
+        http_status: metadata.httpStatus,
+        http_status_text: metadata.httpStatusText,
+        message: 'The MyAccount API returned an unexpected response shape.'
       },
       suggestion:
-        'Retry the command. If the API keeps returning this shape, capture the response details and update the client parser.'
+        'Retry the command. If the API keeps returning this shape, capture the response and update the client parser.'
     }
   );
 }
@@ -698,14 +662,12 @@ function hasExplicitFailureFlag(payload: Record<string, unknown>): boolean {
   );
 }
 
-function extractApiErrors(
-  payload: Record<string, unknown>,
-  detail: string | undefined
-): ApiErrorValue {
-  if ('errors' in payload) {
+function extractApiErrors(payload: Record<string, unknown>): ApiErrorValue {
+  if ('errors' in payload && payload.errors !== undefined) {
     return toJsonValue(payload.errors);
   }
 
+  const detail = readString(payload.detail);
   if (detail !== undefined) {
     return detail;
   }
@@ -721,15 +683,40 @@ function extractApiErrors(
   return null;
 }
 
-function extractApiExtraFields(payload: Record<string, unknown>): {
-  [key: string]: JsonValue;
-} {
-  const entries: Array<[string, JsonValue]> = Object.entries(payload)
-    .filter(([key]) => !API_RESPONSE_RESERVED_FIELDS.has(key))
-    .map(([key, value]): [string, JsonValue] => [key, toJsonValue(value)])
-    .filter(([, value]) => value === false || hasMeaningfulApiValue(value));
+function readApiMessage(
+  payload: Record<string, unknown>,
+  metadata: ApiResponseMetadata
+): string {
+  return (
+    firstDefinedString(
+      readString(payload.message),
+      readString(payload.detail),
+      readString(payload.error_message),
+      readString(payload.error)
+    ) ?? defaultApiMessage(metadata)
+  );
+}
 
-  return Object.fromEntries(entries);
+function summarizeApiFailure(
+  payload: Record<string, unknown>,
+  metadata: ApiResponseMetadata
+): string {
+  return (
+    firstDefinedString(
+      readString(payload.detail),
+      readString(payload.message),
+      readString(payload.error_message),
+      readString(payload.error),
+      readString(payload.errors)
+    ) ?? `${metadata.httpStatus} ${metadata.httpStatusText}`.trim()
+  );
+}
+
+function buildApiContextDetails(metadata: ApiResponseMetadata): string[] {
+  return [
+    `HTTP status: ${metadata.httpStatus} ${metadata.httpStatusText}`.trim(),
+    `Path: ${metadata.path}`
+  ];
 }
 
 function parseApiCode(value: unknown): number | undefined {
@@ -757,12 +744,6 @@ function firstDefinedString(
   ...values: Array<string | undefined>
 ): string | undefined {
   return values.find((value) => value !== undefined);
-}
-
-function formatOptionalApiValue(label: string, value: unknown): string[] {
-  return hasMeaningfulApiValue(value)
-    ? [`${label}: ${stableStringify(toJsonValue(value), 0)}`]
-    : [];
 }
 
 function hasMeaningfulApiValue(value: unknown): boolean {

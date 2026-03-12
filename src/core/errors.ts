@@ -11,11 +11,22 @@ export const EXIT_CODES = {
 
 export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
 
+export interface CliJsonErrorShape {
+  backend_payload?: JsonValue;
+  code: string;
+  exit_code: ExitCode;
+  http_status?: number;
+  http_status_text?: string;
+  message: string;
+  raw_body_preview?: string;
+}
+
 export interface CliErrorOptions {
   cause?: unknown;
   code: string;
   details?: string[];
   exitCode?: ExitCode;
+  json?: CliJsonErrorShape;
   metadata?: JsonValue;
   suggestion?: string;
 }
@@ -26,6 +37,7 @@ export class CliError extends Error {
   readonly code: string;
   readonly details: string[];
   readonly exitCode: ExitCode;
+  readonly json: CliJsonErrorShape | undefined;
   readonly metadata: JsonValue | undefined;
   readonly suggestion: string | undefined;
 
@@ -34,6 +46,7 @@ export class CliError extends Error {
     this.code = options.code;
     this.exitCode = options.exitCode ?? EXIT_CODES.general;
     this.details = options.details ?? [];
+    this.json = options.json;
     this.metadata = options.metadata;
     this.suggestion = options.suggestion;
     this.cause = options.cause;
@@ -82,6 +95,12 @@ export function formatError(
 
 function serializeError(error: unknown): JsonValue {
   if (isCliError(error)) {
+    if (error.json !== undefined) {
+      return {
+        error: toJsonValue(error.json)
+      };
+    }
+
     return {
       error: {
         code: error.code,
