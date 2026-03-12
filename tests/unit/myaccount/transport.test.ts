@@ -1,6 +1,6 @@
 import { CliError } from '../../../src/core/errors.js';
 import { MyAccountApiTransport } from '../../../src/myaccount/transport.js';
-import type { ApiEnvelope } from '../../../src/myaccount/types.js';
+import type { ApiEnvelope, FetchLike } from '../../../src/myaccount/types.js';
 
 describe('MyAccountApiTransport', () => {
   const credentials = {
@@ -190,6 +190,104 @@ describe('MyAccountApiTransport', () => {
     ).rejects.toThrow(/unexpected response shape/i);
   });
 
+  it('extracts a DRF-style detail message from failed API responses', async () => {
+    const transport = new MyAccountApiTransport(credentials, {
+      fetchFn: () =>
+        Promise.resolve(
+          createFetchResponse(undefined, {
+            ok: false,
+            status: 401,
+            statusText: 'Unauthorized',
+            json: () =>
+              Promise.resolve({
+                detail: 'Authentication credentials were not provided.'
+              })
+          })
+        )
+    });
+
+    await expect(
+      transport.get<ApiEnvelope<Record<string, never>>>('/iam/multi-crn/', {
+        includeProjectContext: false
+      })
+    ).rejects.toThrow(/Authentication credentials were not provided/i);
+  });
+
+  it('extracts message and status_code from non-envelope API failures', async () => {
+    const transport = new MyAccountApiTransport(credentials, {
+      fetchFn: () =>
+        Promise.resolve(
+          createFetchResponse(undefined, {
+            ok: false,
+            status: 400,
+            statusText: 'Bad Request',
+            json: () =>
+              Promise.resolve({
+                status_code: 400,
+                message: 'Project not found'
+              })
+          })
+        )
+    });
+
+    await expect(
+      transport.get<ApiEnvelope<Record<string, never>>>('/iam/multi-crn/', {
+        includeProjectContext: false
+      })
+    ).rejects.toThrow(/Project not found/i);
+  });
+
+  it('treats a 200 response with errors=true as an API failure', async () => {
+    const transport = new MyAccountApiTransport(credentials, {
+      fetchFn: () =>
+        Promise.resolve(
+          createFetchResponse(undefined, {
+            json: () =>
+              Promise.resolve({
+                errors: true,
+                message: 'Validation failed'
+              })
+          })
+        )
+    });
+
+    await expect(
+      transport.get<ApiEnvelope<Record<string, never>>>('/iam/multi-crn/', {
+        includeProjectContext: false
+      })
+    ).rejects.toThrow(/Validation failed/i);
+  });
+
+  it('uses a short response preview for non-json failed responses', async () => {
+    const transport = new MyAccountApiTransport(credentials, {
+      fetchFn: () =>
+        Promise.resolve(
+          createFetchResponse(undefined, {
+            ok: false,
+            status: 502,
+            statusText: 'Bad Gateway',
+            json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+            text: () =>
+              Promise.resolve('<html><body>502 Bad Gateway</body></html>')
+          })
+        )
+    });
+
+    await expect(
+      transport.get<ApiEnvelope<Record<string, never>>>('/iam/multi-crn/', {
+        includeProjectContext: false
+      })
+    ).rejects.toMatchObject({
+      details: expect.arrayContaining([
+        expect.stringContaining('HTTP status: 502 Bad Gateway'),
+        expect.stringContaining(
+          'Response preview: <html><body>502 Bad Gateway</body></html>'
+        )
+      ]),
+      message: expect.stringContaining('Unexpected API error')
+    });
+  });
+
   it('wraps network failures in an actionable CLI error', async () => {
     const transport = new MyAccountApiTransport(credentials, {
       fetchFn: () => Promise.reject(new Error('dns failure'))
@@ -215,11 +313,15 @@ function envelope<TData>(
   };
 }
 
-function createFetchResponse(payload: unknown) {
+function createFetchResponse(
+  payload: unknown,
+  overrides: Partial<Awaited<ReturnType<FetchLike>>> = {}
+): Awaited<ReturnType<FetchLike>> {
   return {
-    ok: true,
-    status: 200,
-    statusText: 'OK',
-    json: () => Promise.resolve(payload)
+    ok: overrides.ok ?? true,
+    status: overrides.status ?? 200,
+    statusText: overrides.statusText ?? 'OK',
+    json: overrides.json ?? (() => Promise.resolve(payload)),
+    ...(overrides.text === undefined ? {} : { text: overrides.text })
   };
 }
