@@ -81,23 +81,22 @@ function createNodeClientStub() {
       message: 'Success'
     })
   );
-  const runNodeAction = vi.fn(
-    (nodeId: string, body: NodeActionRequest) =>
-      Promise.resolve({
-        code: 200,
-        data: {
-          action_type: body.type,
-          created_at: '2026-03-11T10:05:00Z',
-          ...(body.type === 'save_images' ? { image_id: 'img-123' } : {}),
-          id: 301,
-          resource_id: nodeId,
-          resource_name: 'node-a',
-          status: body.type === 'power_off' ? 'in_progress' : 'done'
-        },
-        errors: {},
-        message:
-          body.type === 'save_images' ? 'Image creation initiated' : 'Success'
-      })
+  const runNodeAction = vi.fn((nodeId: string, body: NodeActionRequest) =>
+    Promise.resolve({
+      code: 200,
+      data: {
+        action_type: body.type,
+        created_at: '2026-03-11T10:05:00Z',
+        ...(body.type === 'save_images' ? { image_id: 'img-123' } : {}),
+        id: 301,
+        resource_id: nodeId,
+        resource_name: 'node-a',
+        status: body.type === 'power_off' ? 'in_progress' : 'done'
+      },
+      errors: {},
+      message:
+        body.type === 'save_images' ? 'Image creation initiated' : 'Success'
+    })
   );
   const listNodeCatalogOs = vi.fn(() =>
     Promise.resolve({
@@ -406,6 +405,50 @@ describe('node commands', () => {
     expect(stdout.buffer).toContain('"action": "save-image"');
     expect(stdout.buffer).toContain('"image_id": "img-123"');
     expect(stdout.buffer).toContain('"message": "Image creation initiated"');
+  });
+
+  it('rejects blank save-image names before calling the API client', async () => {
+    const { runtime, stub } = createRuntimeFixture();
+    await seedProfile(runtime);
+    const program = createProgram(runtime);
+
+    await expect(
+      program.parseAsync([
+        'node',
+        'e2ectl',
+        'node',
+        'action',
+        'save-image',
+        '101',
+        '--name',
+        '   ',
+        '--alias',
+        'prod'
+      ])
+    ).rejects.toThrow(/Image name cannot be empty/i);
+
+    expect(stub.runNodeAction).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-numeric node ids for action commands before calling the API client', async () => {
+    const { runtime, stub } = createRuntimeFixture();
+    await seedProfile(runtime);
+    const program = createProgram(runtime);
+
+    await expect(
+      program.parseAsync([
+        'node',
+        'e2ectl',
+        'node',
+        'action',
+        'power-on',
+        'node-abc',
+        '--alias',
+        'prod'
+      ])
+    ).rejects.toThrow(/Node ID must be numeric/i);
+
+    expect(stub.runNodeAction).not.toHaveBeenCalled();
   });
 
   it('creates a public-node request that stays compatible with backend serializer defaults', async () => {

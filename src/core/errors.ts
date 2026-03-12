@@ -1,3 +1,5 @@
+import { stableStringify, toJsonValue, type JsonValue } from './json.js';
+
 export const EXIT_CODES = {
   success: 0,
   general: 1,
@@ -14,6 +16,7 @@ export interface CliErrorOptions {
   code: string;
   details?: string[];
   exitCode?: ExitCode;
+  metadata?: JsonValue;
   suggestion?: string;
 }
 
@@ -23,6 +26,7 @@ export class CliError extends Error {
   readonly code: string;
   readonly details: string[];
   readonly exitCode: ExitCode;
+  readonly metadata: JsonValue | undefined;
   readonly suggestion: string | undefined;
 
   constructor(message: string, options: CliErrorOptions) {
@@ -30,6 +34,7 @@ export class CliError extends Error {
     this.code = options.code;
     this.exitCode = options.exitCode ?? EXIT_CODES.general;
     this.details = options.details ?? [];
+    this.metadata = options.metadata;
     this.suggestion = options.suggestion;
     this.cause = options.cause;
   }
@@ -39,7 +44,18 @@ export function isCliError(error: unknown): error is CliError {
   return error instanceof CliError;
 }
 
-export function formatError(error: unknown): string {
+export interface FormatErrorOptions {
+  json?: boolean;
+}
+
+export function formatError(
+  error: unknown,
+  options: FormatErrorOptions = {}
+): string {
+  if (options.json) {
+    return `${stableStringify(serializeError(error))}\n`;
+  }
+
   if (isCliError(error)) {
     const lines = [`Error: ${error.message}`];
 
@@ -62,4 +78,48 @@ export function formatError(error: unknown): string {
   }
 
   return 'Unexpected error: an unknown failure occurred.\n';
+}
+
+function serializeError(error: unknown): JsonValue {
+  if (isCliError(error)) {
+    return {
+      error: {
+        code: error.code,
+        details: error.details,
+        exit_code: error.exitCode,
+        message: error.message,
+        metadata: error.metadata ?? null,
+        suggestion: error.suggestion ?? null,
+        type: 'cli'
+      }
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        details: [],
+        exit_code: EXIT_CODES.general,
+        message: error.message,
+        metadata: null,
+        suggestion: null,
+        type: 'unexpected'
+      }
+    };
+  }
+
+  return {
+    error: {
+      code: 'UNKNOWN_ERROR',
+      details: [],
+      exit_code: EXIT_CODES.general,
+      message: 'an unknown failure occurred.',
+      metadata: {
+        value: toJsonValue(error)
+      },
+      suggestion: null,
+      type: 'unknown'
+    }
+  };
 }

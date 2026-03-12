@@ -14,7 +14,8 @@ import type {
   NodeCreateRequest,
   NodeCreateResult,
   NodeDetails,
-  NodeListResponse
+  NodeListResponse,
+  SimpleNodeActionRequest
 } from './types.js';
 
 export interface NodeContextOptions {
@@ -33,11 +34,13 @@ export interface NodeDeleteOptions extends NodeContextOptions {
   force?: boolean;
 }
 
-export type NodeActionCommandName =
-  | 'lock-vm'
-  | 'power-off'
-  | 'power-on'
-  | 'save-image';
+export type SimpleNodeActionCommandName = 'lock-vm' | 'power-off' | 'power-on';
+
+export type NodeActionCommandName = SimpleNodeActionCommandName | 'save-image';
+
+export interface NodeSaveImageOptions extends NodeContextOptions {
+  name: string;
+}
 
 export interface NodeCatalogPlansOptions extends NodeContextOptions {
   category: string;
@@ -126,6 +129,15 @@ export interface NodeServiceDependencies {
   store: NodeStore;
 }
 
+const SIMPLE_NODE_ACTION_REQUEST_TYPE_BY_COMMAND: Record<
+  SimpleNodeActionCommandName,
+  SimpleNodeActionRequest['type']
+> = {
+  'lock-vm': 'lock_vm',
+  'power-off': 'power_off',
+  'power-on': 'power_on'
+};
+
 export class NodeService {
   constructor(private readonly dependencies: NodeServiceDependencies) {}
 
@@ -147,21 +159,24 @@ export class NodeService {
     };
   }
 
-  async runNodeAction(
+  async runSimpleAction(
     nodeId: string,
     options: NodeContextOptions,
-    action: NodeActionCommandName,
-    request: NodeActionRequest
+    action: SimpleNodeActionCommandName
   ): Promise<NodeActionCommandResult> {
-    assertNodeId(nodeId);
-    const client = await this.createClient(options);
-    const response = await client.runNodeAction(nodeId, request);
+    return this.runAction(nodeId, options, action, {
+      type: SIMPLE_NODE_ACTION_REQUEST_TYPE_BY_COMMAND[action]
+    });
+  }
 
-    return {
-      action,
-      message: response.message,
-      result: response.data
-    };
+  async saveImage(
+    nodeId: string,
+    options: NodeSaveImageOptions
+  ): Promise<NodeActionCommandResult> {
+    return this.runAction(nodeId, options, 'save-image', {
+      name: normalizeRequiredString(options.name, 'Image name', '--name'),
+      type: 'save_images'
+    });
   }
 
   async deleteNode(
@@ -264,6 +279,23 @@ export class NodeService {
     });
 
     return this.dependencies.createApiClient(credentials);
+  }
+
+  private async runAction(
+    nodeId: string,
+    options: NodeContextOptions,
+    action: NodeActionCommandName,
+    request: NodeActionRequest
+  ): Promise<NodeActionCommandResult> {
+    assertNodeId(nodeId);
+    const client = await this.createClient(options);
+    const response = await client.runNodeAction(nodeId, request);
+
+    return {
+      action,
+      message: response.message,
+      result: response.data
+    };
   }
 }
 

@@ -1,4 +1,4 @@
-import { CliError } from '../../../src/core/errors.js';
+import { CliError, EXIT_CODES } from '../../../src/core/errors.js';
 import { MyAccountApiClient } from '../../../src/myaccount/client.js';
 
 describe('MyAccountApiClient', () => {
@@ -302,6 +302,62 @@ describe('MyAccountApiClient', () => {
     expect(seenInit?.method).toBe('DELETE');
   });
 
+  it('issues node action requests with PUT and the expected body payload', async () => {
+    let seenInput = '';
+    let seenInit: RequestInit | undefined;
+
+    const fetchFn = vi.fn((input: string, init?: RequestInit) => {
+      seenInput = input;
+      seenInit = init;
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () =>
+          Promise.resolve({
+            code: 200,
+            data: {
+              action_type: 'save_images',
+              created_at: '2026-03-12T09:00:00Z',
+              id: 301,
+              image_id: 'img-123',
+              resource_id: '101',
+              resource_name: 'node-a',
+              status: 'in_progress'
+            },
+            errors: {},
+            message: 'Image creation initiated'
+          })
+      });
+    });
+
+    const client = new MyAccountApiClient(credentials, {
+      baseUrl: 'https://example.test/',
+      fetchFn
+    });
+
+    await client.runNodeAction('101', {
+      name: 'golden-image',
+      type: 'save_images'
+    });
+
+    expect(seenInput).toBe(
+      'https://example.test/nodes/101/actions/?apikey=api-key&project_id=123&location=Delhi'
+    );
+    expect(seenInit?.method).toBe('PUT');
+    expect(seenInit?.headers).toMatchObject({
+      Authorization: 'Bearer auth-token',
+      'Content-Type': 'application/json'
+    });
+    expect(seenInit?.body).toBe(
+      JSON.stringify({
+        name: 'golden-image',
+        type: 'save_images'
+      })
+    );
+  });
+
   it('raises a CLI error when the API envelope indicates failure', async () => {
     const client = new MyAccountApiClient(credentials, {
       fetchFn: () =>
@@ -325,6 +381,138 @@ describe('MyAccountApiClient', () => {
     await expect(client.validateCredentials()).rejects.toThrow(/Unauthorized/);
   });
 
+  it('treats string-shaped api errors as actionable api failures', async () => {
+    const client = new MyAccountApiClient(credentials, {
+      fetchFn: () =>
+        Promise.resolve({
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          json: () =>
+            Promise.resolve({
+              code: 400,
+              data: {},
+              errors: 'VM already in state of action to be performed',
+              message: 'Bad Request'
+            })
+        })
+    });
+
+    await expect(
+      client.runNodeAction('298189', {
+        type: 'power_on'
+      })
+    ).rejects.toThrow(/Bad Request/);
+  });
+
+  it('extracts DRF-style detail errors and preserves auth exit codes', async () => {
+    const client = new MyAccountApiClient(credentials, {
+      fetchFn: () =>
+        Promise.resolve({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          json: () =>
+            Promise.resolve({
+              detail: 'Authentication credentials were not provided.'
+            })
+        })
+    });
+
+    await expect(client.validateCredentials()).rejects.toMatchObject({
+      code: 'API_REQUEST_FAILED',
+      exitCode: EXIT_CODES.auth,
+      message:
+        'MyAccount API request failed: Authentication credentials were not provided.',
+      metadata: {
+        api: {
+          detail: 'Authentication credentials were not provided.',
+          http_status: 401,
+          http_status_text: 'Unauthorized'
+        }
+      }
+    });
+  });
+
+  it('treats status_code envelopes and extra backend fields as actionable failures', async () => {
+    const client = new MyAccountApiClient(credentials, {
+      fetchFn: () =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: () =>
+            Promise.resolve({
+              data: {},
+              errors: {
+                state: ['invalid']
+              },
+              message: 'Invalid state value provided',
+              request_id: 'req-123',
+              status: false,
+              status_code: '400'
+            })
+        })
+    });
+
+    await expect(
+      client.runNodeAction('298189', { type: 'power_on' })
+    ).rejects.toMatchObject({
+      code: 'API_REQUEST_FAILED',
+      exitCode: EXIT_CODES.network,
+      message: 'MyAccount API request failed: Invalid state value provided',
+      metadata: {
+        api: {
+          code: 400,
+          errors: {
+            state: ['invalid']
+          },
+          fields: {
+            request_id: 'req-123',
+            status: false,
+            status_code: '400'
+          },
+          message: 'Invalid state value provided'
+        }
+      }
+    });
+  });
+
+  it('treats success-coded responses with errors=true as failures', async () => {
+    const client = new MyAccountApiClient(credentials, {
+      fetchFn: () =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: () =>
+            Promise.resolve({
+              code: 200,
+              data: {},
+              errors: true,
+              message: 'Image already exists'
+            })
+        })
+    });
+
+    await expect(
+      client.runNodeAction('298189', {
+        name: 'golden-image',
+        type: 'save_images'
+      })
+    ).rejects.toMatchObject({
+      code: 'API_REQUEST_FAILED',
+      message: 'MyAccount API request failed: Image already exists',
+      metadata: {
+        api: {
+          code: 200,
+          errors: true,
+          message: 'Image already exists'
+        }
+      }
+    });
+  });
+
   it('raises a CLI error when the response is malformed', async () => {
     const client = new MyAccountApiClient(credentials, {
       fetchFn: () =>
@@ -342,6 +530,31 @@ describe('MyAccountApiClient', () => {
     await expect(client.validateCredentials()).rejects.toThrow(
       /unexpected response shape/i
     );
+  });
+
+  it('surfaces malformed non-json bodies without swallowing the response preview', async () => {
+    const client = new MyAccountApiClient(credentials, {
+      fetchFn: () =>
+        Promise.resolve({
+          ok: false,
+          status: 502,
+          statusText: 'Bad Gateway',
+          json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+          text: () => Promise.resolve('<html>gateway failed</html>')
+        })
+    });
+
+    await expect(client.validateCredentials()).rejects.toMatchObject({
+      code: 'INVALID_API_RESPONSE',
+      exitCode: EXIT_CODES.network,
+      message: 'The MyAccount API returned a non-JSON or malformed response.',
+      metadata: {
+        api: {
+          http_status: 502,
+          response_body_preview: '<html>gateway failed</html>'
+        }
+      }
+    });
   });
 
   it('wraps network failures in an actionable CLI error', async () => {

@@ -97,6 +97,34 @@ Every user-visible behavior change requires:
 
 This includes command help text, prompt/confirmation flow, error wording that operators rely on, and machine-facing JSON fields.
 
+## CLI Error Contract
+
+- `--json` command failures are emitted on stderr as deterministic JSON with this shape:
+
+```json
+{
+  "error": {
+    "code": "API_REQUEST_FAILED",
+    "message": "MyAccount API request failed: ...",
+    "details": ["HTTP status: 400 Bad Request"],
+    "exit_code": 5,
+    "metadata": {},
+    "suggestion": "Check the request inputs and try again.",
+    "type": "cli"
+  }
+}
+```
+
+- Keep the top-level `error` object stable. Field names, null handling, and key ordering are part of the compatibility contract.
+- Preserve the existing exit-code categories. Richer backend details must not silently change `usage`, `config`, `auth`, or `network` behavior.
+
+### MyAccount Error Normalization
+
+- Standard envelope errors: parse `{code, data, errors, message}` and surface HTTP status plus backend `code`, `message`, `errors`, `data`, and extra fields when present.
+- DRF detail errors: parse `{detail: "..."}` as the primary failure summary and treat it as backend error content when no `errors` field exists.
+- `status_code`-style errors: treat `status_code` the same as `code`, even when it is a string, and preserve extra backend fields such as `status` or `request_id`.
+- Malformed or non-JSON API responses: raise `INVALID_API_RESPONSE`, include HTTP status and path, and include a short response-body preview when available.
+
 ## Testing Expectations
 
 - Manual live API tests are never part of normal CI.

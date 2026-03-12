@@ -5,11 +5,12 @@ import { createRuntime } from './runtime.js';
 
 async function main(): Promise<void> {
   const program = createProgram(createRuntime());
+  const json = process.argv.includes('--json');
 
   try {
     await program.parseAsync(process.argv);
   } catch (error: unknown) {
-    process.stderr.write(formatError(error));
+    process.stderr.write(formatError(error, { json }));
     process.exitCode = isCliError(error) ? error.exitCode : 1;
   }
 }

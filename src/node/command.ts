@@ -1,15 +1,15 @@
 import { Command } from 'commander';
 
 import type { CliRuntime } from '../app/runtime.js';
-import { CliError, EXIT_CODES } from '../core/errors.js';
 import { renderNodeResult } from './formatter.js';
 import {
   NodeService,
-  type NodeActionCommandName,
   type NodeCatalogPlansOptions,
   type NodeContextOptions,
   type NodeCreateOptions,
-  type NodeDeleteOptions
+  type NodeDeleteOptions,
+  type NodeSaveImageOptions,
+  type SimpleNodeActionCommandName
 } from './service.js';
 
 interface GlobalOptions {
@@ -146,18 +146,15 @@ function buildNodeActionCommand(
 
   registerSimpleNodeActionCommand(command, service, runtime, {
     actionName: 'power-on',
-    description: 'Power on a node.',
-    requestType: 'power_on'
+    description: 'Power on a node.'
   });
   registerSimpleNodeActionCommand(command, service, runtime, {
     actionName: 'power-off',
-    description: 'Power off a node.',
-    requestType: 'power_off'
+    description: 'Power off a node.'
   });
   registerSimpleNodeActionCommand(command, service, runtime, {
     actionName: 'lock-vm',
-    description: 'Lock a node.',
-    requestType: 'lock_vm'
+    description: 'Lock a node.'
   });
 
   command
@@ -173,18 +170,10 @@ function buildNodeActionCommand(
     .action(
       async (
         nodeId: string,
-        options: NodeContextOptions & { name: string },
+        options: NodeSaveImageOptions,
         commandInstance: Command
       ) => {
-        const result = await service.runNodeAction(
-          nodeId,
-          options,
-          'save-image',
-          {
-            name: normalizeRequiredString(options.name, 'Image name', '--name'),
-            type: 'save_images'
-          }
-        );
+        const result = await service.saveImage(nodeId, options);
         runtime.stdout.write(
           renderNodeResult(
             result,
@@ -278,9 +267,8 @@ function registerSimpleNodeActionCommand(
   service: NodeService,
   runtime: CliRuntime,
   options: {
-    actionName: NodeActionCommandName;
+    actionName: SimpleNodeActionCommandName;
     description: string;
-    requestType: 'lock_vm' | 'power_off' | 'power_on';
   }
 ): void {
   command
@@ -298,13 +286,10 @@ function registerSimpleNodeActionCommand(
         commandOptions: NodeContextOptions,
         commandInstance: Command
       ) => {
-        const result = await service.runNodeAction(
+        const result = await service.runSimpleAction(
           nodeId,
           commandOptions,
-          options.actionName,
-          {
-            type: options.requestType
-          }
+          options.actionName
         );
         runtime.stdout.write(
           renderNodeResult(
@@ -314,21 +299,4 @@ function registerSimpleNodeActionCommand(
         );
       }
     );
-}
-
-function normalizeRequiredString(
-  value: string,
-  label: string,
-  flag: string
-): string {
-  const normalized = value.trim();
-  if (normalized.length > 0) {
-    return normalized;
-  }
-
-  throw new CliError(`${label} cannot be empty.`, {
-    code: 'EMPTY_REQUIRED_VALUE',
-    exitCode: EXIT_CODES.usage,
-    suggestion: `Pass a non-empty value with ${flag}.`
-  });
 }

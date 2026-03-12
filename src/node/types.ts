@@ -150,9 +150,7 @@ export interface NodeSaveImageRequest {
   type: 'save_images';
 }
 
-export type NodeActionRequest =
-  | NodeSaveImageRequest
-  | SimpleNodeActionRequest;
+export type NodeActionRequest = NodeSaveImageRequest | SimpleNodeActionRequest;
 
 export interface NodeActionResult {
   action_type: string;

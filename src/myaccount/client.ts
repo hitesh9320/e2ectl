@@ -11,6 +11,7 @@ import type {
   NodeListResponse
 } from '../node/index.js';
 import type { ResolvedCredentials } from '../config/index.js';
+import { stableStringify, toJsonValue, type JsonValue } from '../core/json.js';
 import { CliError, EXIT_CODES } from '../core/errors.js';
 
 const DEFAULT_BASE_URL = 'https://api.e2enetworks.com/myaccount/api/v1';
@@ -24,6 +25,7 @@ export type FetchLike = (
   ok: boolean;
   status: number;
   statusText: string;
+  text?(): Promise<string>;
 }>;
 
 export interface ApiClientOptions {
@@ -35,17 +37,39 @@ export interface ApiClientOptions {
 export interface ApiEnvelope<TData> {
   code: number;
   data: TData;
-  errors: Record<string, ApiErrorValue>;
+  errors: ApiErrorValue;
   message: string;
 }
 
-export type ApiErrorValue =
-  | null
-  | string
-  | string[]
-  | number
-  | boolean
-  | Record<string, unknown>;
+export type ApiErrorValue = JsonValue;
+
+interface ApiResponseMetadata {
+  httpStatus: number;
+  httpStatusText: string;
+  path: string;
+}
+
+interface ParsedApiPayload<TData> {
+  apiCode: number | undefined;
+  data: TData;
+  detail: string | undefined;
+  errors: ApiErrorValue;
+  explicitFailure: boolean;
+  extraFields: { [key: string]: JsonValue };
+  message: string;
+}
+
+type FetchResponse = Awaited<ReturnType<FetchLike>>;
+
+const API_RESPONSE_RESERVED_FIELDS = new Set([
+  'code',
+  'data',
+  'detail',
+  'error',
+  'error_message',
+  'errors',
+  'message'
+]);
 
 export interface ApiRequestOptions {
   body?: unknown;
@@ -225,45 +249,42 @@ export class MyAccountApiClient implements MyAccountClient {
             }),
         signal: controller.signal
       });
+      const metadata: ApiResponseMetadata = {
+        httpStatus: response.status,
+        httpStatusText: response.statusText,
+        path: options.path
+      };
+      const rawPayload = await readResponseBody(response);
+      const payload = normalizeApiPayload<TData>(rawPayload, metadata);
 
-      const payload = await response.json();
-      if (!isApiEnvelope<TData>(payload)) {
-        throw new CliError(
-          'The MyAccount API returned an unexpected response shape.',
-          {
-            code: 'INVALID_API_RESPONSE',
-            details: [`Path: ${options.path}`],
-            exitCode: EXIT_CODES.network,
-            suggestion:
-              'Retry the command and inspect the API response if the issue persists.'
-          }
-        );
+      if (isApiFailure(payload, response.ok, metadata)) {
+        throw buildApiRequestFailedError(payload, metadata);
       }
 
-      if (!response.ok || payload.code >= 400) {
-        throw new CliError(`MyAccount API request failed: ${payload.message}`, {
-          code: 'API_REQUEST_FAILED',
-          details: [
-            `HTTP status: ${response.status} ${response.statusText}`,
-            `API code: ${payload.code}`,
-            `Path: ${options.path}`,
-            `Errors: ${JSON.stringify(payload.errors)}`
-          ],
-          exitCode:
-            response.status === 401 || response.status === 403
-              ? EXIT_CODES.auth
-              : EXIT_CODES.network,
-          suggestion:
-            response.status === 401 || response.status === 403
-              ? 'Verify the saved token and API key, then run the command again.'
-              : 'Check the request inputs and try again.'
-        });
+      if (isUnexpectedApiSuccessPayload(rawPayload, response.ok, metadata)) {
+        throw buildUnexpectedApiResponseError(metadata, rawPayload);
       }
 
-      return payload;
+      return {
+        code: payload.apiCode ?? metadata.httpStatus,
+        data: payload.data,
+        errors: payload.errors,
+        message: payload.message
+      };
     } catch (error: unknown) {
       if (error instanceof CliError) {
         throw error;
+      }
+
+      if (error instanceof InvalidApiResponseBodyError) {
+        throw buildInvalidApiResponseError(
+          {
+            httpStatus: error.httpStatus,
+            httpStatusText: error.httpStatusText,
+            path: options.path
+          },
+          error.rawText
+        );
       }
 
       if (isAbortError(error)) {
@@ -271,9 +292,17 @@ export class MyAccountApiClient implements MyAccountClient {
           code: 'API_TIMEOUT',
           details: [
             `Timed out after ${this.timeoutMs}ms`,
-            `Base URL: ${this.baseUrl}`
+            `Base URL: ${this.baseUrl}`,
+            `Path: ${options.path}`
           ],
           exitCode: EXIT_CODES.network,
+          metadata: {
+            api: {
+              base_url: this.baseUrl,
+              path: options.path,
+              timeout_ms: this.timeoutMs
+            }
+          },
           suggestion:
             'Retry the command. If the timeout persists, check network connectivity or raise the timeout in a future revision.'
         });
@@ -285,8 +314,19 @@ export class MyAccountApiClient implements MyAccountClient {
           {
             code: 'API_NETWORK_ERROR',
             cause: error,
-            details: [`Reason: ${error.message}`, `Base URL: ${this.baseUrl}`],
+            details: [
+              `Reason: ${error.message}`,
+              `Base URL: ${this.baseUrl}`,
+              `Path: ${options.path}`
+            ],
             exitCode: EXIT_CODES.network,
+            metadata: {
+              api: {
+                base_url: this.baseUrl,
+                path: options.path,
+                reason: error.message
+              }
+            },
             suggestion:
               'Check network access and API availability, then retry the command.'
           }
@@ -356,12 +396,418 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isApiEnvelope<TData>(value: unknown): value is ApiEnvelope<TData> {
+async function readResponseBody(response: FetchResponse): Promise<unknown> {
+  if (typeof response.text === 'function') {
+    const rawText = await response.text();
+    if (rawText.trim().length === 0) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(rawText) as unknown;
+    } catch (error: unknown) {
+      throw new InvalidApiResponseBodyError(
+        response.status,
+        response.statusText,
+        rawText,
+        error
+      );
+    }
+  }
+
+  try {
+    return await response.json();
+  } catch (error: unknown) {
+    throw new InvalidApiResponseBodyError(
+      response.status,
+      response.statusText,
+      undefined,
+      error
+    );
+  }
+}
+
+function normalizeApiPayload<TData>(
+  payload: unknown,
+  metadata: ApiResponseMetadata
+): ParsedApiPayload<TData> {
+  if (!isRecord(payload)) {
+    return {
+      apiCode: undefined,
+      data: buildFallbackData<TData>(payload),
+      detail: undefined,
+      errors: null,
+      explicitFailure: false,
+      extraFields: {},
+      message: defaultApiMessage(metadata)
+    };
+  }
+
+  const apiCode =
+    parseApiCode(payload.code) ?? parseApiCode(payload.status_code);
+  const detail = readString(payload.detail);
+  const errors = extractApiErrors(payload, detail);
+
+  return {
+    apiCode,
+    data: extractApiData<TData>(payload, metadata, apiCode),
+    detail,
+    errors,
+    explicitFailure: hasExplicitFailureFlag(payload),
+    extraFields: extractApiExtraFields(payload),
+    message:
+      firstDefinedString(
+        readString(payload.message),
+        detail,
+        readString(payload.error_message),
+        readString(payload.error)
+      ) ?? defaultApiMessage(metadata)
+  };
+}
+
+function extractApiData<TData>(
+  payload: Record<string, unknown>,
+  metadata: ApiResponseMetadata,
+  apiCode: number | undefined
+): TData {
+  if ('data' in payload) {
+    return payload.data as TData;
+  }
+
+  if (
+    metadata.httpStatus >= 200 &&
+    metadata.httpStatus < 300 &&
+    apiCode === undefined &&
+    !looksLikeDirectErrorPayload(payload)
+  ) {
+    return payload as TData;
+  }
+
+  return {} as TData;
+}
+
+function buildFallbackData<TData>(payload: unknown): TData {
+  if (payload === null) {
+    return {} as TData;
+  }
+
+  return payload as TData;
+}
+
+function isApiFailure<TData>(
+  payload: ParsedApiPayload<TData>,
+  responseOk: boolean,
+  metadata: ApiResponseMetadata
+): boolean {
+  const effectiveCode = payload.apiCode ?? metadata.httpStatus;
   return (
-    isRecord(value) &&
-    typeof value.code === 'number' &&
-    'data' in value &&
-    isRecord(value.errors) &&
-    typeof value.message === 'string'
+    !responseOk ||
+    effectiveCode >= 400 ||
+    payload.explicitFailure ||
+    hasMeaningfulApiValue(payload.errors)
   );
+}
+
+function buildApiRequestFailedError<TData>(
+  payload: ParsedApiPayload<TData>,
+  metadata: ApiResponseMetadata
+): CliError {
+  const effectiveCode = payload.apiCode ?? metadata.httpStatus;
+  const summary =
+    firstDefinedString(payload.detail, payload.message) ??
+    `${metadata.httpStatus} ${metadata.httpStatusText}`.trim();
+  const details = [
+    `HTTP status: ${metadata.httpStatus} ${metadata.httpStatusText}`.trim(),
+    ...(payload.apiCode === undefined ? [] : [`API code: ${payload.apiCode}`]),
+    ...(payload.message === summary ? [] : [`API message: ${payload.message}`]),
+    ...(payload.detail === undefined ? [] : [`API detail: ${payload.detail}`]),
+    ...formatOptionalApiValue('API errors', payload.errors),
+    ...formatOptionalApiValue('API data', payload.data),
+    ...formatOptionalApiValue('API fields', payload.extraFields),
+    `Path: ${metadata.path}`
+  ];
+
+  return new CliError(`MyAccount API request failed: ${summary}`, {
+    code: 'API_REQUEST_FAILED',
+    details,
+    exitCode: resolveApiExitCode(metadata.httpStatus, effectiveCode),
+    metadata: {
+      api: {
+        code: payload.apiCode ?? null,
+        data: toJsonValue(payload.data),
+        detail: payload.detail ?? null,
+        errors: payload.errors,
+        fields: payload.extraFields,
+        http_status: metadata.httpStatus,
+        http_status_text: metadata.httpStatusText,
+        message: payload.message,
+        path: metadata.path
+      }
+    },
+    suggestion: buildApiSuggestion(metadata.httpStatus, effectiveCode)
+  });
+}
+
+function buildInvalidApiResponseError(
+  metadata: ApiResponseMetadata,
+  rawText: string | undefined
+): CliError {
+  return new CliError(
+    'The MyAccount API returned a non-JSON or malformed response.',
+    {
+      code: 'INVALID_API_RESPONSE',
+      details: [
+        `HTTP status: ${metadata.httpStatus} ${metadata.httpStatusText}`.trim(),
+        `Path: ${metadata.path}`,
+        ...(rawText === undefined
+          ? []
+          : [`Response body: ${previewResponseBody(rawText)}`])
+      ],
+      exitCode: resolveApiExitCode(metadata.httpStatus),
+      metadata: {
+        api: {
+          code: null,
+          data: null,
+          detail: null,
+          errors: null,
+          fields: {},
+          http_status: metadata.httpStatus,
+          http_status_text: metadata.httpStatusText,
+          message: null,
+          path: metadata.path,
+          response_body_preview:
+            rawText === undefined ? null : previewResponseBody(rawText)
+        }
+      },
+      suggestion: buildApiSuggestion(metadata.httpStatus)
+    }
+  );
+}
+
+function buildUnexpectedApiResponseError(
+  metadata: ApiResponseMetadata,
+  payload: unknown
+): CliError {
+  return new CliError(
+    'The MyAccount API returned an unexpected response shape.',
+    {
+      code: 'INVALID_API_RESPONSE',
+      details: [
+        `HTTP status: ${metadata.httpStatus} ${metadata.httpStatusText}`.trim(),
+        `Path: ${metadata.path}`,
+        ...formatOptionalApiValue('Response fields', payload)
+      ],
+      exitCode: resolveApiExitCode(metadata.httpStatus),
+      metadata: {
+        api: {
+          code: null,
+          data: toJsonValue(payload),
+          detail: null,
+          errors: null,
+          fields: {},
+          http_status: metadata.httpStatus,
+          http_status_text: metadata.httpStatusText,
+          message: null,
+          path: metadata.path
+        }
+      },
+      suggestion:
+        'Retry the command. If the API keeps returning this shape, capture the response details and update the client parser.'
+    }
+  );
+}
+
+function resolveApiExitCode(
+  httpStatus: number,
+  apiCode?: number
+): (typeof EXIT_CODES)[keyof typeof EXIT_CODES] {
+  return httpStatus === 401 ||
+    httpStatus === 403 ||
+    apiCode === 401 ||
+    apiCode === 403
+    ? EXIT_CODES.auth
+    : EXIT_CODES.network;
+}
+
+function buildApiSuggestion(httpStatus: number, apiCode?: number): string {
+  if (
+    httpStatus === 401 ||
+    httpStatus === 403 ||
+    apiCode === 401 ||
+    apiCode === 403
+  ) {
+    return 'Verify the saved token and API key, then run the command again.';
+  }
+
+  if ((apiCode ?? httpStatus) >= 500) {
+    return 'Retry the command. If the API keeps failing, capture the response details and escalate it.';
+  }
+
+  return 'Check the request inputs and try again.';
+}
+
+function defaultApiMessage(metadata: ApiResponseMetadata): string {
+  return metadata.httpStatusText.trim().length > 0
+    ? metadata.httpStatusText
+    : 'Success';
+}
+
+function looksLikeDirectErrorPayload(
+  payload: Record<string, unknown>
+): boolean {
+  return (
+    'message' in payload ||
+    'detail' in payload ||
+    'errors' in payload ||
+    'error' in payload ||
+    'error_message' in payload ||
+    hasExplicitFailureFlag(payload)
+  );
+}
+
+function isUnexpectedApiSuccessPayload(
+  payload: unknown,
+  responseOk: boolean,
+  metadata: ApiResponseMetadata
+): boolean {
+  return (
+    responseOk &&
+    metadata.httpStatus >= 200 &&
+    metadata.httpStatus < 300 &&
+    isRecord(payload) &&
+    hasReservedApiField(payload) &&
+    !('code' in payload) &&
+    !('status_code' in payload) &&
+    !('data' in payload) &&
+    !hasExplicitFailureFlag(payload)
+  );
+}
+
+function hasReservedApiField(payload: Record<string, unknown>): boolean {
+  return Object.keys(payload).some((key) =>
+    API_RESPONSE_RESERVED_FIELDS.has(key)
+  );
+}
+
+function hasExplicitFailureFlag(payload: Record<string, unknown>): boolean {
+  return (
+    payload.status === false ||
+    payload.success === false ||
+    payload.ok === false ||
+    payload.errors === true
+  );
+}
+
+function extractApiErrors(
+  payload: Record<string, unknown>,
+  detail: string | undefined
+): ApiErrorValue {
+  if ('errors' in payload) {
+    return toJsonValue(payload.errors);
+  }
+
+  if (detail !== undefined) {
+    return detail;
+  }
+
+  if ('error' in payload && payload.error !== undefined) {
+    return toJsonValue(payload.error);
+  }
+
+  if ('error_message' in payload && payload.error_message !== undefined) {
+    return toJsonValue(payload.error_message);
+  }
+
+  return null;
+}
+
+function extractApiExtraFields(payload: Record<string, unknown>): {
+  [key: string]: JsonValue;
+} {
+  const entries: Array<[string, JsonValue]> = Object.entries(payload)
+    .filter(([key]) => !API_RESPONSE_RESERVED_FIELDS.has(key))
+    .map(([key, value]): [string, JsonValue] => [key, toJsonValue(value)])
+    .filter(([, value]) => value === false || hasMeaningfulApiValue(value));
+
+  return Object.fromEntries(entries);
+}
+
+function parseApiCode(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    return Number(value.trim());
+  }
+
+  return undefined;
+}
+
+function readString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function firstDefinedString(
+  ...values: Array<string | undefined>
+): string | undefined {
+  return values.find((value) => value !== undefined);
+}
+
+function formatOptionalApiValue(label: string, value: unknown): string[] {
+  return hasMeaningfulApiValue(value)
+    ? [`${label}: ${stableStringify(toJsonValue(value), 0)}`]
+    : [];
+}
+
+function hasMeaningfulApiValue(value: unknown): boolean {
+  if (value === null || value === false || value === undefined) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim().length > 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  if (isRecord(value)) {
+    return Object.keys(value).length > 0;
+  }
+
+  return true;
+}
+
+function previewResponseBody(body: string): string {
+  const normalized = body.replace(/\s+/g, ' ').trim();
+  return normalized.length <= 240
+    ? normalized
+    : `${normalized.slice(0, 237)}...`;
+}
+
+class InvalidApiResponseBodyError extends Error {
+  override readonly cause: unknown;
+  readonly httpStatus: number;
+  readonly httpStatusText: string;
+  readonly rawText: string | undefined;
+
+  constructor(
+    httpStatus: number,
+    httpStatusText: string,
+    rawText: string | undefined,
+    cause: unknown
+  ) {
+    super('Invalid API response body');
+    this.cause = cause;
+    this.httpStatus = httpStatus;
+    this.httpStatusText = httpStatusText;
+    this.rawText = rawText;
+  }
 }
