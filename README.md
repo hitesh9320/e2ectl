@@ -1,6 +1,6 @@
-# e2ectl
+# e2ectl-hitesh-test
 
-`e2ectl` is a command-line interface for managing E2E Networks MyAccount resources from the terminal.
+`e2ectl-hitesh-test` is a personal release-sandbox build of the `e2ectl` CLI for managing E2E Networks MyAccount resources from the terminal.
 
 Current v1 scope:
 
@@ -20,18 +20,18 @@ Current v1 scope:
 After the first public npm release:
 
 ```bash
-npm install -g e2ectl
+npm install -g e2ectl-hitesh-test
 e2ectl --help
 ```
 
 To try prereleases such as `1.0.0-rc.1`:
 
 ```bash
-npm install -g e2ectl@next
+npm install -g e2ectl-hitesh-test@next
 e2ectl --help
 ```
 
-Until the public npm package is live, install from this repository:
+Until the personal sandbox package is live, install from this repository:
 
 ```bash
 npm install
