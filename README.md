@@ -271,12 +271,14 @@ npm install
 make lint
 make test
 make build
+npm run test:integration
 ```
 
 Useful local commands:
 
 ```bash
 make dev
+npm run test:integration
 npm run test:manual
 ```
 
@@ -304,6 +306,7 @@ src/
 - `make lint` runs Prettier check, ESLint, and TypeScript typecheck.
 - `make test` runs unit tests only.
 - `make build` verifies the distributable compile.
+- `npm run test:integration` runs the fake-API, compiled-CLI, and tarball-install integration lane.
 - `npm run test:manual` runs read-only live API checks and stays skipped unless `E2ECTL_RUN_MANUAL_E2E=1`.
 - The manual suite covers OS catalog discovery, plan/image catalog discovery, and node list by default.
 
@@ -320,12 +323,19 @@ Manual test inputs:
 
 GitHub Actions runs on:
 
-- pushes to `main`
-- every `pull_request`
+- pull requests to `develop`
+- pull requests to `main`
+- pushes to `develop` for the full staging gate
+- merge queue (`merge_group`) checks for `main`
 
-Each CI job uses Node `18`, `20`, or `22` and runs:
+Fast PR checks in `ci.yml` use Node `18`, `20`, and `22` and run:
 
 1. `npm ci`
 2. `make lint`
 3. `make test`
 4. `make build`
+
+The dedicated `integration.yml` workflow runs on Node `22` and adds:
+
+1. `npm run test:integration`
+2. `npm pack --dry-run`
