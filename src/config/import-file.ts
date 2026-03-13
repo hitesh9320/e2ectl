@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { CliError, EXIT_CODES } from '../utils/errors.js';
+import { CliError, EXIT_CODES } from '../core/errors.js';
 
 export interface ImportedProfileSecrets {
   api_key: string;
@@ -115,11 +115,6 @@ function requireAuthToken(
   const apiAuthToken = profile.api_auth_token;
   if (typeof apiAuthToken === 'string' && apiAuthToken.trim().length > 0) {
     return apiAuthToken.trim();
-  }
-
-  const authToken = profile.auth_token;
-  if (typeof authToken === 'string' && authToken.trim().length > 0) {
-    return authToken.trim();
   }
 
   throw new CliError(

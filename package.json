@@ -1,25 +1,38 @@
 {
-  "name": "e2ectl",
+  "name": "e2ectl-hitesh-test",
   "version": "0.1.0",
-  "description": "CLI prototype for E2E Networks MyAccount.",
+  "description": "OSS CLI for E2E Networks MyAccount.",
+  "homepage": "https://github.com/hitesh9320/e2ectl#readme",
+  "bugs": {
+    "url": "https://github.com/hitesh9320/e2ectl/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hitesh9320/e2ectl.git"
+  },
   "type": "module",
   "bin": {
-    "e2ectl": "dist/index.js"
+    "e2ectl-hitesh-test": "dist/app/index.js"
   },
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
     "clean": "node ./scripts/clean.mjs",
-    "dev": "node --import tsx ./src/index.ts",
+    "dev": "node --import tsx ./src/app/index.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint src tests vitest.config.ts vitest.manual.config.ts",
+    "lint": "eslint src tests vitest.config.ts vitest.integration.config.ts vitest.manual.config.ts",
+    "prepack": "npm run build",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:manual": "vitest run --config vitest.manual.config.ts",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit"

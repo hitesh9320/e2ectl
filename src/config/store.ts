@@ -1,12 +1,22 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import {
+  chmod,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { ConfigFile, ProfileConfig } from '../types/config.js';
-import { stableStringify, type JsonValue } from '../utils/json.js';
+import { stableStringify, type JsonValue } from '../core/json.js';
+import type { ConfigFile, ProfileConfig } from './types.js';
 
 const DEFAULT_DIRECTORY_NAME = '.e2e';
 const DEFAULT_CONFIG_FILE_NAME = 'config.json';
+const CONFIG_DIRECTORY_MODE = 0o700;
+const CONFIG_FILE_MODE = 0o600;
 
 export interface ConfigStoreOptions {
   configPath?: string;
@@ -36,9 +46,10 @@ export class ConfigStore {
 
   async write(config: ConfigFile): Promise<void> {
     const normalizedConfig = normalizeConfig(config);
-    await mkdir(path.dirname(this.configPath), { recursive: true });
+    const directoryPath = path.dirname(this.configPath);
+    await ensureSecureDirectory(directoryPath);
     const payload = stableStringify(normalizedConfig as unknown as JsonValue);
-    await writeFile(this.configPath, `${payload}\n`, 'utf8');
+    await writeSecureConfigFile(this.configPath, `${payload}\n`);
   }
 
   async upsertProfile(
@@ -93,6 +104,26 @@ export class ConfigStore {
     return normalizeConfig(nextConfig);
   }
 
+  async updateProfile(
+    alias: string,
+    patch: Partial<ProfileConfig>
+  ): Promise<ConfigFile> {
+    const config = await this.read();
+    const currentProfile = config.profiles[alias];
+    const nextConfig: ConfigFile = {
+      ...config,
+      profiles: {
+        ...config.profiles,
+        [alias]: normalizeProfile({
+          ...currentProfile,
+          ...patch
+        } as ProfileConfig)
+      }
+    };
+    await this.write(nextConfig);
+    return normalizeConfig(nextConfig);
+  }
+
   async hasProfile(alias: string): Promise<boolean> {
     const config = await this.read();
     return config.profiles[alias] !== undefined;
@@ -107,9 +138,9 @@ export function createEmptyConfig(): ConfigFile {
 
 export function normalizeConfig(config: ConfigFile): ConfigFile {
   const sortedProfiles = Object.fromEntries(
-    Object.entries(config.profiles).sort(([leftAlias], [rightAlias]) =>
-      leftAlias.localeCompare(rightAlias)
-    )
+    Object.entries(config.profiles)
+      .map(([alias, profile]) => [alias, normalizeProfile(profile)] as const)
+      .sort(([leftAlias], [rightAlias]) => leftAlias.localeCompare(rightAlias))
   );
 
   return config.default === undefined
@@ -122,6 +153,23 @@ export function normalizeConfig(config: ConfigFile): ConfigFile {
       };
 }
 
+function normalizeProfile(profile: ProfileConfig): ProfileConfig {
+  const normalizedProfile: ProfileConfig = {
+    api_key: profile.api_key.trim(),
+    auth_token: profile.auth_token.trim()
+  };
+
+  if (isNonEmptyString(profile.default_project_id)) {
+    normalizedProfile.default_project_id = profile.default_project_id.trim();
+  }
+
+  if (isNonEmptyString(profile.default_location)) {
+    normalizedProfile.default_location = profile.default_location.trim();
+  }
+
+  return normalizedProfile;
+}
+
 function firstProfileAlias(
   profiles: Record<string, ProfileConfig>
 ): string | undefined {
@@ -130,4 +178,39 @@ function firstProfileAlias(
 
 function isFileNotFound(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+}
+
+function isNonEmptyString(value: string | undefined): value is string {
+  return value !== undefined && value.trim().length > 0;
+}
+
+async function ensureSecureDirectory(directoryPath: string): Promise<void> {
+  await mkdir(directoryPath, {
+    recursive: true,
+    mode: CONFIG_DIRECTORY_MODE
+  });
+  await chmod(directoryPath, CONFIG_DIRECTORY_MODE);
+}
+
+async function writeSecureConfigFile(
+  configPath: string,
+  payload: string
+): Promise<void> {
+  const tempPath = path.join(
+    path.dirname(configPath),
+    `.${path.basename(configPath)}.${randomUUID()}.tmp`
+  );
+
+  try {
+    await writeFile(tempPath, payload, {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: CONFIG_FILE_MODE
+    });
+    await chmod(tempPath, CONFIG_FILE_MODE);
+    await rename(tempPath, configPath);
+    await chmod(configPath, CONFIG_FILE_MODE);
+  } finally {
+    await rm(tempPath, { force: true });
+  }
 }
