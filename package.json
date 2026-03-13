@@ -12,7 +12,7 @@
   },
   "type": "module",
   "bin": {
-    "e2ectl": "dist/app/index.js"
+    "e2ectl-hitesh-test": "dist/app/index.js"
   },
   "files": [
     "dist"

@@ -6,7 +6,7 @@ describe('built CLI help', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stderr).toBe('');
-    expect(result.stdout).toContain('Usage: e2ectl');
+    expect(result.stdout).toContain('Usage: e2ectl-hitesh-test');
     expect(result.stdout).toContain('Commands:');
     expect(result.stdout).toContain('config');
     expect(result.stdout).toContain('node');

@@ -21,14 +21,14 @@ After the first public npm release:
 
 ```bash
 npm install -g e2ectl-hitesh-test
-e2ectl --help
+e2ectl-hitesh-test --help
 ```
 
 To try prereleases such as `1.0.0-rc.1`:
 
 ```bash
 npm install -g e2ectl-hitesh-test@next
-e2ectl --help
+e2ectl-hitesh-test --help
 ```
 
 Until the personal sandbox package is live, install from this repository:
@@ -37,7 +37,7 @@ Until the personal sandbox package is live, install from this repository:
 npm install
 make build
 npm link
-e2ectl --help
+e2ectl-hitesh-test --help
 ```
 
 For contributor and maintainer workflows, use:
@@ -61,13 +61,13 @@ The intended operator flow is:
 Interactive setup:
 
 ```bash
-e2ectl config import --file ~/Downloads/config.json
+e2ectl-hitesh-test config import --file ~/Downloads/config.json
 ```
 
 Non-interactive setup:
 
 ```bash
-e2ectl config import \
+e2ectl-hitesh-test config import \
   --file ~/Downloads/config.json \
   --default prod \
   --default-project-id 46429 \
@@ -78,15 +78,15 @@ e2ectl config import \
 ### 2. Confirm what was saved
 
 ```bash
-e2ectl config list
-e2ectl config list --json
+e2ectl-hitesh-test config list
+e2ectl-hitesh-test config list --json
 ```
 
 If you need to change saved defaults later:
 
 ```bash
-e2ectl config set-default --alias prod
-e2ectl config set-context \
+e2ectl-hitesh-test config set-default --alias prod
+e2ectl-hitesh-test config set-context \
   --alias prod \
   --default-project-id 46429 \
   --default-location Delhi
@@ -95,7 +95,7 @@ e2ectl config set-context \
 ### 3. Discover valid OS rows
 
 ```bash
-e2ectl node catalog os --alias prod
+e2ectl-hitesh-test node catalog os --alias prod
 ```
 
 ### 4. Discover valid plan and image pairs
@@ -103,7 +103,7 @@ e2ectl node catalog os --alias prod
 Choose one OS row from the previous command and use those exact values here:
 
 ```bash
-e2ectl node catalog plans \
+e2ectl-hitesh-test node catalog plans \
   --alias prod \
   --display-category "Linux Virtual Node" \
   --category Ubuntu \
@@ -116,7 +116,7 @@ e2ectl node catalog plans \
 Use the exact `plan` and `image` values returned by `node catalog plans`:
 
 ```bash
-e2ectl node create \
+e2ectl-hitesh-test node create \
   --alias prod \
   --name demo-node \
   --plan <exact-plan-from-catalog> \
@@ -126,8 +126,8 @@ e2ectl node create \
 ### 6. Inspect nodes
 
 ```bash
-e2ectl node list --alias prod
-e2ectl node get <node-id> --alias prod
+e2ectl-hitesh-test node list --alias prod
+e2ectl-hitesh-test node get <node-id> --alias prod
 ```
 
 If the selected alias already has a saved project id and location, later node commands can omit `--project-id` and `--location`.
@@ -167,7 +167,7 @@ Resolution order is:
 You can also add a profile manually:
 
 ```bash
-e2ectl config add \
+e2ectl-hitesh-test config add \
   --alias prod \
   --api-key <api-key> \
   --auth-token <bearer-token> \
@@ -182,21 +182,21 @@ The API key and bearer token are validated before the profile is saved. Default 
 Use the built-in help for the full surface:
 
 ```bash
-e2ectl --help
-e2ectl config --help
-e2ectl node --help
+e2ectl-hitesh-test --help
+e2ectl-hitesh-test config --help
+e2ectl-hitesh-test node --help
 ```
 
 Common day-to-day commands:
 
 ```bash
-e2ectl config list
-e2ectl node list
-e2ectl node get <node-id>
-e2ectl node catalog os
-e2ectl node catalog plans --display-category <value> --category <value> --os <value> --os-version <value>
-e2ectl node create --name <name> --plan <plan> --image <image>
-e2ectl node delete <node-id> --force
+e2ectl-hitesh-test config list
+e2ectl-hitesh-test node list
+e2ectl-hitesh-test node get <node-id>
+e2ectl-hitesh-test node catalog os
+e2ectl-hitesh-test node catalog plans --display-category <value> --category <value> --os <value> --os-version <value>
+e2ectl-hitesh-test node create --name <name> --plan <plan> --image <image>
+e2ectl-hitesh-test node delete <node-id> --force
 ```
 
 ## JSON And Automation

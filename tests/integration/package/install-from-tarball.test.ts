@@ -52,7 +52,9 @@ describe('package install smoke from tarball', () => {
         prefixDirectory,
         'node_modules',
         '.bin',
-        process.platform === 'win32' ? 'e2ectl.cmd' : 'e2ectl'
+        process.platform === 'win32'
+          ? 'e2ectl-hitesh-test.cmd'
+          : 'e2ectl-hitesh-test'
       );
       const helpResult = await runCommand(installedCliPath, ['--help'], {
         env: {
@@ -62,7 +64,7 @@ describe('package install smoke from tarball', () => {
 
       expect(helpResult.exitCode).toBe(0);
       expect(helpResult.stderr).toBe('');
-      expect(helpResult.stdout).toContain('Usage: e2ectl');
+      expect(helpResult.stdout).toContain('Usage: e2ectl-hitesh-test');
 
       const jsonResult = await runCommand(
         installedCliPath,
