@@ -31,7 +31,10 @@ describe('package install smoke from tarball', () => {
 
       expect(packResult.exitCode).toBe(0);
 
-      const tarballPath = path.join(packDirectory, 'e2ectl-0.1.0.tgz');
+      const tarballPath = path.join(
+        packDirectory,
+        'e2ectl-hitesh-test-0.1.0.tgz'
+      );
       const installResult = await runCommand(
         'npm',
         ['install', '--prefix', prefixDirectory, tarballPath],

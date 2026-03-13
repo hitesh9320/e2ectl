@@ -1,6 +1,6 @@
-# Releasing e2ectl
+# Releasing e2ectl-hitesh-test
 
-This repository is prepared for automated GitHub releases plus npm publishing, with a deliberate first public flow:
+This personal sandbox repository is prepared for automated GitHub releases plus npm publishing, with a deliberate first public flow:
 
 1. publish `1.0.0-rc.1` to npm dist-tag `next`
 2. validate install and operator flow
@@ -69,7 +69,7 @@ The publish workflow derives the dist-tag from the git tag version:
 
 The repo can be prepared before npm ownership exists, but end-to-end publishing only works after these are in place:
 
-1. the unscoped npm package `e2ectl` is owned by a company-controlled npm user account
+1. the npm package `e2ectl-hitesh-test` is owned by the personal npm account used for sandbox publishing
 2. npm trusted publishing is configured for this GitHub repository and the publish workflow
 3. the repo has a `RELEASE_PLEASE_TOKEN` secret
 
@@ -97,12 +97,12 @@ After that promotion lands on `main`:
 2. review the generated changelog and version bump
 3. merge the release PR
 4. Release Please creates tag `v1.0.0-rc.1` and a GitHub Release
-5. the publish workflow publishes `e2ectl@1.0.0-rc.1` to npm dist-tag `next`
+5. the publish workflow publishes `e2ectl-hitesh-test@1.0.0-rc.1` to npm dist-tag `next`
 
 Operator install once that package exists:
 
 ```bash
-npm install -g e2ectl@next
+npm install -g e2ectl-hitesh-test@next
 e2ectl --help
 ```
 
@@ -119,12 +119,12 @@ After that promotion lands on `main`:
 1. Release Please opens a release PR for `1.0.0`
 2. review and merge the release PR
 3. Release Please creates tag `v1.0.0` and a GitHub Release
-4. the publish workflow publishes `e2ectl@1.0.0` to npm dist-tag `latest`
+4. the publish workflow publishes `e2ectl-hitesh-test@1.0.0` to npm dist-tag `latest`
 
 Stable install:
 
 ```bash
-npm install -g e2ectl
+npm install -g e2ectl-hitesh-test
 e2ectl --help
 ```
 
@@ -156,7 +156,7 @@ npm pack --dry-run
 Before turning the workflows on for real publishing:
 
 1. create the company-controlled npm user account
-2. claim the unscoped npm package name `e2ectl`
+2. claim the npm package name `e2ectl-hitesh-test`
 3. configure npm trusted publishing for this repo and the publish workflow
 4. add the `RELEASE_PLEASE_TOKEN` repository secret
 5. confirm GitHub Actions is allowed to create and approve pull requests if your repo settings require it
