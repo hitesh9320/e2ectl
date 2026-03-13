@@ -9,8 +9,13 @@ This repository is prepared for automated GitHub releases plus npm publishing, w
 ## Files And Responsibilities
 
 - `.github/workflows/ci.yml`
-  - normal verification on pushes and pull requests
+  - fast verification on pull requests to `develop` and `main`
+  - required merge queue verification for `main`
   - runs `make lint`, `make test`, and `make build`
+- `.github/workflows/integration.yml`
+  - full staging verification on pushes to `develop`
+  - full promotion verification on pull requests and merge queue runs for `main`
+  - runs `make lint`, `make test`, `make build`, `npm run test:integration`, and `npm pack --dry-run`
 - `.github/workflows/release-please.yml`
   - watches `main`
   - opens and updates release PRs
@@ -33,11 +38,15 @@ This repo uses Release Please for version management.
 
 Normal flow:
 
-1. merge Conventional Commit PRs into `main`
-2. Release Please opens or updates a release PR
-3. merge that release PR
-4. Release Please creates the git tag and GitHub Release
-5. the publish workflow runs from that release and publishes to npm
+1. merge feature and hardening PRs into `develop`
+2. `integration.yml` validates the merged `develop` tip
+3. open a promotion PR from `develop` to `main`
+4. `ci.yml` and `integration.yml` run on that PR, and again in merge queue for `main`
+5. merge the promotion PR into `main`
+6. Release Please opens or updates a release PR
+7. merge that release PR
+8. Release Please creates the git tag and GitHub Release
+9. the publish workflow runs from that release and publishes to npm
 
 Rules:
 
@@ -76,13 +85,13 @@ Why the extra GitHub token matters:
 
 The first prerelease is intentionally forced rather than inferred.
 
-Use a small PR that lands on `main` with a commit message body that contains:
+Ensure the code promoted from `develop` to `main` contains a commit message body with:
 
 ```text
 Release-As: 1.0.0-rc.1
 ```
 
-After that commit lands on `main`:
+After that promotion lands on `main`:
 
 1. Release Please opens a release PR for `1.0.0-rc.1`
 2. review the generated changelog and version bump
@@ -105,7 +114,7 @@ After the release candidate is validated, force the stable cut with another smal
 Release-As: 1.0.0
 ```
 
-After that commit lands on `main`:
+After that promotion lands on `main`:
 
 1. Release Please opens a release PR for `1.0.0`
 2. review and merge the release PR
@@ -131,6 +140,16 @@ npm pack --dry-run
 ```
 
 This keeps the published artifact tied to a green tagged commit instead of assuming the earlier PR CI was enough.
+
+Before promoting `develop` to `main`, the staging branch should already be green on:
+
+```bash
+make lint
+make test
+make build
+npm run test:integration
+npm pack --dry-run
+```
 
 ## Maintainer Checklist
 

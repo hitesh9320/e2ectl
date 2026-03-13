@@ -18,6 +18,7 @@ npm install
 make lint
 make test
 make build
+npm run test:integration
 npm pack --dry-run
 ```
 
@@ -28,18 +29,28 @@ npm install
 make lint
 make test
 make build
+npm run test:integration
 ```
 
 Useful commands:
 
 ```bash
 make dev
+npm run test:integration
 npm run test:manual
 node dist/app/index.js --help
 npm pack --dry-run
 ```
 
 For release automation and npm publish flow, read [docs/RELEASING.md](./docs/RELEASING.md).
+
+## Branch Roles
+
+- `develop` is the staging branch for pre-v1 integration and hardening work.
+- `main` is the release branch.
+- Pull requests into `develop` use the fast gate.
+- Merges into `develop` run the full staging gate.
+- Promotion from `develop` to `main` reruns the full gate before release automation on `main`.
 
 ## Architecture Contract
 
@@ -120,6 +131,7 @@ Reuse `config/resolver.ts` for credential/context resolution and keep shared MyA
 - `make lint` runs formatting checks, ESLint, and `tsc --noEmit`
 - `make test` runs unit tests only
 - `make build` verifies the production compile
+- `npm run test:integration` runs the process-level and fake-API integration lane
 - `npm pack --dry-run` verifies the publishable package contents locally
 - `npm run test:manual` is for explicit read-only live API checks and stays skipped unless `E2ECTL_RUN_MANUAL_E2E=1`
 
@@ -147,14 +159,22 @@ This includes command help text, prompt/confirmation flow, error wording that op
 
 ## Testing Expectations
 
+- Integration tests live under `tests/integration/`.
+- Integration tests exercise the compiled CLI process, temporary `HOME` directories, a fake local MyAccount server, and a local tarball install smoke path.
+- The integration lane uses the internal `E2ECTL_MYACCOUNT_BASE_URL` override so the built CLI can talk to the fake server without hitting live APIs.
 - Manual live API tests are never part of normal CI.
-- CI runs `make lint`, `make test`, and `make build`.
+- Fast PR checks run `make lint`, `make test`, and `make build`.
+- The full staging/promotion gate additionally runs `npm run test:integration` and `npm pack --dry-run`.
 - Prefer unit coverage at the domain level and keep the seams explicit:
   - `tests/unit/app/`
   - `tests/unit/core/`
   - `tests/unit/myaccount/`
   - `tests/unit/config/`
   - `tests/unit/node/`
+- Keep integration coverage focused on real CLI behavior:
+  - `tests/integration/app/`
+  - `tests/integration/config/`
+  - `tests/integration/node/`
 - `tests/unit/myaccount/` covers transport behavior, request construction, and centralized error handling.
 - `tests/unit/app/` covers CLI entrypoint behavior such as usage-error normalization and exit paths.
 - `tests/unit/config/` covers secure and atomic config persistence in addition to command behavior.
@@ -195,7 +215,10 @@ The default manual suite verifies:
 
 GitHub Actions runs for:
 
-- pushes to `main`
-- all pull requests
+- pull requests to `develop`
+- pull requests to `main`
+- merge queue (`merge_group`) checks for `main`
+- pushes to `develop` for the full staging gate
 
-The CI matrix covers Node `18`, `20`, and `22`.
+The fast `ci.yml` workflow covers Node `18`, `20`, and `22`.
+The dedicated `integration.yml` workflow runs on Node `22` only.

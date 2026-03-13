@@ -8,6 +8,8 @@ Before pushing or merging:
 make lint
 make test
 make build
+npm run test:integration
+npm pack --dry-run
 ```
 
 Optional live verification:
@@ -18,6 +20,14 @@ npm run test:manual
 
 For pre-release smoke checks, also verify a clean-room first-user flow with a temporary `HOME`: import a credential file, save defaults, run `config list`, and exercise read-only node commands against live credentials.
 For release automation and npm publish activation, use [docs/RELEASING.md](./RELEASING.md).
+
+## Branch Roles
+
+- `develop` is the staging branch for pre-v1 integration and hardening.
+- `main` is the release branch.
+- Pull requests into `develop` use the fast gate.
+- Pushes to `develop` run the full staging gate.
+- Promotion from `develop` to `main` reruns the full gate and merge queue checks before release automation on `main`.
 
 ## Source Layout
 
@@ -40,29 +50,41 @@ Keep config persistence secure and atomic during normal writes, and keep Command
 
 GitHub Actions verifies:
 
-- pushes to `main`
-- every pull request
+- pull requests to `develop`
+- pull requests to `main`
+- merge queue (`merge_group`) checks for `main`
+- pushes to `develop`
 
-Matrix:
+Fast `ci.yml` matrix:
 
 - Node 18
 - Node 20
 - Node 22
 
-Each job runs:
+Fast gate steps:
 
 1. `npm ci`
 2. `make lint`
 3. `make test`
 4. `make build`
 
+Full staging/promotion gate in `integration.yml`:
+
+1. `npm ci`
+2. `make lint`
+3. `make test`
+4. `make build`
+5. `npm run test:integration`
+6. `npm pack --dry-run`
+
 The manual live API suite is intentionally not part of CI.
+The integration lane uses the internal `E2ECTL_MYACCOUNT_BASE_URL` override so the compiled CLI can talk to a fake local MyAccount server during automated tests, and it also includes a local tarball install smoke path.
 
 ## Release Workflows
 
 This repo also has two release-specific workflows:
 
-- `.github/workflows/release-please.yml` opens release PRs and creates GitHub tags/releases
+- `.github/workflows/release-please.yml` opens release PRs and creates GitHub tags/releases from `main`
 - `.github/workflows/publish.yml` publishes tagged GitHub Releases to npm after rerunning the local verification gate
 
 Those workflows are intentionally designed so the repo can be prepared now and fully activated later, once a company-controlled npm owner account and trusted publishing are configured.
@@ -75,7 +97,7 @@ Before calling a branch production-ready, verify:
 2. first-time setup from a clean temp `HOME`
 3. `config import` and `config list` behavior
 4. read-only live API calls such as `node catalog os`, `node catalog plans`, and `node list`
-5. normal repo gates: `make lint`, `make test`, `make build`
+5. local gates: `make lint`, `make test`, `make build`, `npm run test:integration`
 6. publish package preview: `npm pack --dry-run`
 
 ## Documentation Duties

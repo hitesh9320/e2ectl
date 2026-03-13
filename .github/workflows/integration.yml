@@ -1,9 +1,11 @@
-name: ci
+name: integration
 
 on:
-  pull_request:
+  push:
     branches:
       - develop
+  pull_request:
+    branches:
       - main
   merge_group:
     branches:
@@ -13,16 +15,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: integration-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify:
+  verify-integration:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [18, 20, 22]
 
     steps:
       - name: Checkout
@@ -31,7 +29,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -45,3 +43,9 @@ jobs:
 
       - name: Build
         run: make build
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      - name: Package dry run
+        run: npm pack --dry-run
