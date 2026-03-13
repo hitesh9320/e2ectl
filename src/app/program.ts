@@ -16,7 +16,7 @@ export function createProgram(runtime: CliRuntime = createRuntime()): Command {
   const program = new Command();
 
   program
-    .name('e2ectl')
+    .name('e2ectl-hitesh-test')
     .description('CLI for the E2E Networks MyAccount platform.')
     .version(packageMetadata.version)
     .option('--json', 'Emit deterministic JSON output.')

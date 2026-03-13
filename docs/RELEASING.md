@@ -103,7 +103,7 @@ Operator install once that package exists:
 
 ```bash
 npm install -g e2ectl-hitesh-test@next
-e2ectl --help
+e2ectl-hitesh-test --help
 ```
 
 ## Stable Release: 1.0.0
@@ -125,7 +125,7 @@ Stable install:
 
 ```bash
 npm install -g e2ectl-hitesh-test
-e2ectl --help
+e2ectl-hitesh-test --help
 ```
 
 ## Release Verification
