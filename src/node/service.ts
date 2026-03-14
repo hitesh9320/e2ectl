@@ -364,25 +364,24 @@ export class NodeService {
   async createNode(
     options: NodeCreateOptions
   ): Promise<NodeCreateCommandResult> {
-    const client = await this.createNodeClient(options);
     const billingType = normalizeNodeCreateBillingType(options.billingType);
     const committedPlanId = normalizeCommittedPlanId(
       billingType,
       options.committedPlanId
     );
-    const result = await client.createNode(
-      buildDefaultNodeCreateRequest({
-        ...(committedPlanId === null
-          ? {}
-          : {
-              cn_id: committedPlanId,
-              cn_status: COMMITTED_NODE_CREATE_STATUS
-            }),
-        image: normalizeRequiredString(options.image, 'Image', '--image'),
-        name: normalizeRequiredString(options.name, 'Name', '--name'),
-        plan: normalizeRequiredString(options.plan, 'Plan', '--plan')
-      })
-    );
+    const request = buildDefaultNodeCreateRequest({
+      ...(committedPlanId === null
+        ? {}
+        : {
+            cn_id: committedPlanId,
+            cn_status: COMMITTED_NODE_CREATE_STATUS
+          }),
+      image: normalizeRequiredString(options.image, 'Image', '--image'),
+      name: normalizeRequiredString(options.name, 'Name', '--name'),
+      plan: normalizeRequiredString(options.plan, 'Plan', '--plan')
+    });
+    const client = await this.createNodeClient(options);
+    const result = await client.createNode(request);
 
     return {
       action: 'create',
