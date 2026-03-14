@@ -3,16 +3,28 @@ import {
   type ConfigFile,
   type ResolvedCredentials
 } from '../config/index.js';
+import { formatCliCommand } from '../app/metadata.js';
 import { CliError, EXIT_CODES } from '../core/errors.js';
+import type { SshKeyClient, SshKeySummary } from '../ssh-key/index.js';
+import type { VolumeClient } from '../volume/index.js';
+import type { VpcClient } from '../vpc/index.js';
 import type { NodeClient } from './client.js';
 import { buildDefaultNodeCreateRequest } from './defaults.js';
 import type {
+  NodeActionResult,
+  NodeCatalogBillingType,
+  NodeCatalogCommittedOptionSummary,
+  NodeCatalogCommittedSku,
   NodeCatalogOsData,
   NodeCatalogPlan,
+  NodeCatalogPlanItem,
+  NodeCatalogPlansQuery,
   NodeCatalogQuery,
+  NodeCreateBillingType,
   NodeCreateResult,
   NodeDetails,
-  NodeListResult
+  NodeListResult,
+  NodeCommittedCreateStatus
 } from './types.js';
 
 export interface NodeContextOptions {
@@ -22,6 +34,8 @@ export interface NodeContextOptions {
 }
 
 export interface NodeCreateOptions extends NodeContextOptions {
+  billingType?: string;
+  committedPlanId?: string;
   image: string;
   name: string;
   plan: string;
@@ -32,10 +46,41 @@ export interface NodeDeleteOptions extends NodeContextOptions {
 }
 
 export interface NodeCatalogPlansOptions extends NodeContextOptions {
+  billingType?: string;
   category: string;
   displayCategory: string;
   os: string;
   osVersion: string;
+}
+
+export interface NodeSaveImageOptions extends NodeContextOptions {
+  name: string;
+}
+
+export interface NodeVpcActionOptions extends NodeContextOptions {
+  privateIp?: string;
+  subnetId?: string;
+  vpcId: string;
+}
+
+export interface NodeVolumeActionOptions extends NodeContextOptions {
+  volumeId: string;
+}
+
+export interface NodeSshKeyAttachOptions extends NodeContextOptions {
+  sshKeyIds: string[];
+}
+
+export interface NodeActionStatusSummary {
+  action_id: number;
+  created_at: string;
+  image_id: string | null;
+  status: string;
+}
+
+export interface NodeResolvedSshKeySummary {
+  id: number;
+  label: string;
 }
 
 export interface NodeListCommandResult {
@@ -45,8 +90,15 @@ export interface NodeListCommandResult {
   total_page_number?: number;
 }
 
+export interface NodeCreateBillingSummary {
+  billing_type: NodeCreateBillingType;
+  committed_plan_id?: number;
+  post_commit_behavior?: NodeCommittedCreateStatus;
+}
+
 export interface NodeCreateCommandResult {
   action: 'create';
+  billing: NodeCreateBillingSummary;
   result: NodeCreateResult;
 }
 
@@ -69,8 +121,88 @@ export interface NodeCatalogOsCommandResult {
 
 export interface NodeCatalogPlansCommandResult {
   action: 'catalog-plans';
-  plans: NodeCatalogPlan[];
-  query: NodeCatalogQuery;
+  items: NodeCatalogPlanItem[];
+  query: NodeCatalogPlansQuery;
+}
+
+export interface NodePowerOnCommandResult {
+  action: 'power-on';
+  node_id: number;
+  result: NodeActionStatusSummary;
+}
+
+export interface NodePowerOffCommandResult {
+  action: 'power-off';
+  node_id: number;
+  result: NodeActionStatusSummary;
+}
+
+export interface NodeSaveImageCommandResult {
+  action: 'save-image';
+  image_name: string;
+  node_id: number;
+  result: NodeActionStatusSummary;
+}
+
+export interface NodeVpcAttachCommandResult {
+  action: 'vpc-attach';
+  node_id: number;
+  result: {
+    message: string;
+    project_id: string | null;
+  };
+  vpc: {
+    id: number;
+    name: string;
+    private_ip: string | null;
+    subnet_id: number | null;
+  };
+}
+
+export interface NodeVpcDetachCommandResult {
+  action: 'vpc-detach';
+  node_id: number;
+  result: {
+    message: string;
+    project_id: string | null;
+  };
+  vpc: {
+    id: number;
+    name: string;
+    private_ip: string | null;
+    subnet_id: number | null;
+  };
+}
+
+export interface NodeVolumeAttachCommandResult {
+  action: 'volume-attach';
+  node_id: number;
+  node_vm_id: number;
+  result: {
+    message: string;
+  };
+  volume: {
+    id: number;
+  };
+}
+
+export interface NodeVolumeDetachCommandResult {
+  action: 'volume-detach';
+  node_id: number;
+  node_vm_id: number;
+  result: {
+    message: string;
+  };
+  volume: {
+    id: number;
+  };
+}
+
+export interface NodeSshKeyAttachCommandResult {
+  action: 'ssh-key-attach';
+  node_id: number;
+  result: NodeActionStatusSummary;
+  ssh_keys: NodeResolvedSshKeySummary[];
 }
 
 export type NodeCommandResult =
@@ -79,7 +211,15 @@ export type NodeCommandResult =
   | NodeCreateCommandResult
   | NodeDeleteCommandResult
   | NodeGetCommandResult
-  | NodeListCommandResult;
+  | NodeListCommandResult
+  | NodePowerOffCommandResult
+  | NodePowerOnCommandResult
+  | NodeSaveImageCommandResult
+  | NodeSshKeyAttachCommandResult
+  | NodeVolumeAttachCommandResult
+  | NodeVolumeDetachCommandResult
+  | NodeVpcAttachCommandResult
+  | NodeVpcDetachCommandResult;
 
 interface NodeStore {
   readonly configPath: string;
@@ -89,27 +229,173 @@ interface NodeStore {
 export interface NodeServiceDependencies {
   confirm(message: string): Promise<boolean>;
   createNodeClient(credentials: ResolvedCredentials): NodeClient;
+  createSshKeyClient(credentials: ResolvedCredentials): SshKeyClient;
+  createVolumeClient(credentials: ResolvedCredentials): VolumeClient;
+  createVpcClient(credentials: ResolvedCredentials): VpcClient;
   isInteractive: boolean;
   store: NodeStore;
 }
 
+interface ResolvedSshKey {
+  id: number;
+  label: string;
+  ssh_key: string;
+}
+
+const DEFAULT_NODE_CATALOG_BILLING_TYPE: NodeCatalogBillingType = 'all';
+const DEFAULT_NODE_CREATE_BILLING_TYPE: NodeCreateBillingType = 'hourly';
+const COMMITTED_NODE_CREATE_STATUS: NodeCommittedCreateStatus = 'auto_renew';
+
 export class NodeService {
   constructor(private readonly dependencies: NodeServiceDependencies) {}
+
+  async attachSshKeys(
+    nodeId: string,
+    options: NodeSshKeyAttachOptions
+  ): Promise<NodeSshKeyAttachCommandResult> {
+    const normalizedNodeId = assertNodeId(nodeId);
+    const credentials = await this.resolveContext(options);
+    const nodeClient = this.dependencies.createNodeClient(credentials);
+    const sshKeyClient = this.dependencies.createSshKeyClient(credentials);
+    const sshKeyIds = normalizeDistinctNumericIds(
+      options.sshKeyIds,
+      'SSH key ID',
+      '--ssh-key-id'
+    );
+    const resolvedKeys = resolveSavedSshKeys(
+      await sshKeyClient.listSshKeys(),
+      sshKeyIds
+    );
+    const result = await nodeClient.attachSshKeys(
+      String(normalizedNodeId),
+      resolvedKeys.map((key) => ({
+        label: key.label,
+        ssh_key: key.ssh_key
+      }))
+    );
+
+    return {
+      action: 'ssh-key-attach',
+      node_id: normalizedNodeId,
+      result: summarizeNodeAction(result),
+      ssh_keys: resolvedKeys.map(({ id, label }) => ({
+        id,
+        label
+      }))
+    };
+  }
+
+  async attachVpc(
+    nodeId: string,
+    options: NodeVpcActionOptions
+  ): Promise<NodeVpcAttachCommandResult> {
+    const normalizedNodeId = assertNodeId(nodeId);
+    const vpcId = normalizeRequiredNumericId(
+      options.vpcId,
+      'VPC ID',
+      '--vpc-id'
+    );
+    const subnetId = normalizeOptionalNumericId(
+      options.subnetId,
+      'Subnet ID',
+      '--subnet-id'
+    );
+    const privateIp = normalizeOptionalString(
+      options.privateIp,
+      'Private IP',
+      '--private-ip'
+    );
+    const credentials = await this.resolveContext(options);
+    const client = this.dependencies.createVpcClient(credentials);
+    const result = await client.attachNodeVpc({
+      action: 'attach',
+      ...(privateIp === null ? {} : { input_ip: privateIp }),
+      network_id: vpcId,
+      node_id: normalizedNodeId,
+      ...(subnetId === null ? {} : { subnet_id: subnetId })
+    });
+
+    return {
+      action: 'vpc-attach',
+      node_id: normalizedNodeId,
+      result: {
+        message: result.message,
+        project_id: result.project_id ?? null
+      },
+      vpc: {
+        id: vpcId,
+        name: result.vpc_name,
+        private_ip: privateIp,
+        subnet_id: subnetId
+      }
+    };
+  }
+
+  async attachVolume(
+    nodeId: string,
+    options: NodeVolumeActionOptions
+  ): Promise<NodeVolumeAttachCommandResult> {
+    const normalizedNodeId = assertNodeId(nodeId);
+    const volumeId = normalizeRequiredNumericId(
+      options.volumeId,
+      'Volume ID',
+      '--volume-id'
+    );
+    const credentials = await this.resolveContext(options);
+    const nodeClient = this.dependencies.createNodeClient(credentials);
+    const volumeClient = this.dependencies.createVolumeClient(credentials);
+    const nodeVmId = await this.resolveNodeVmId(nodeClient, normalizedNodeId);
+    const result = await volumeClient.attachVolumeToNode(volumeId, {
+      vm_id: nodeVmId
+    });
+
+    return {
+      action: 'volume-attach',
+      node_id: normalizedNodeId,
+      node_vm_id: nodeVmId,
+      result: {
+        message: result.message
+      },
+      volume: {
+        id: volumeId
+      }
+    };
+  }
 
   async createNode(
     options: NodeCreateOptions
   ): Promise<NodeCreateCommandResult> {
-    const client = await this.createClient(options);
-    const result = await client.createNode(
-      buildDefaultNodeCreateRequest({
-        image: normalizeRequiredString(options.image, 'Image', '--image'),
-        name: normalizeRequiredString(options.name, 'Name', '--name'),
-        plan: normalizeRequiredString(options.plan, 'Plan', '--plan')
-      })
+    const billingType = normalizeNodeCreateBillingType(options.billingType);
+    const committedPlanId = normalizeCommittedPlanId(
+      billingType,
+      options.committedPlanId
     );
+    const request = buildDefaultNodeCreateRequest({
+      ...(committedPlanId === null
+        ? {}
+        : {
+            cn_id: committedPlanId,
+            cn_status: COMMITTED_NODE_CREATE_STATUS
+          }),
+      image: normalizeRequiredString(options.image, 'Image', '--image'),
+      name: normalizeRequiredString(options.name, 'Name', '--name'),
+      plan: normalizeRequiredString(options.plan, 'Plan', '--plan')
+    });
+    const client = await this.createNodeClient(options);
+    const result = await client.createNode(request);
 
     return {
       action: 'create',
+      billing:
+        committedPlanId === null
+          ? {
+              billing_type: billingType
+            }
+          : {
+              billing_type: billingType,
+              committed_plan_id: committedPlanId,
+              post_commit_behavior: COMMITTED_NODE_CREATE_STATUS
+            },
       result
     };
   }
@@ -118,31 +404,108 @@ export class NodeService {
     nodeId: string,
     options: NodeDeleteOptions
   ): Promise<NodeDeleteCommandResult> {
-    assertNodeId(nodeId);
+    const normalizedNodeId = assertNodeId(nodeId);
 
     if (!(options.force ?? false)) {
       assertCanDelete(this.dependencies.isInteractive);
       const confirmed = await this.dependencies.confirm(
-        `Delete node ${nodeId}? This cannot be undone.`
+        `Delete node ${normalizedNodeId}? This cannot be undone.`
       );
 
       if (!confirmed) {
         return {
           action: 'delete',
           cancelled: true,
-          node_id: Number(nodeId)
+          node_id: normalizedNodeId
         };
       }
     }
 
-    const client = await this.createClient(options);
-    const result = await client.deleteNode(nodeId);
+    const client = await this.createNodeClient(options);
+    const result = await client.deleteNode(String(normalizedNodeId));
 
     return {
       action: 'delete',
       cancelled: false,
       message: result.message,
-      node_id: Number(nodeId)
+      node_id: normalizedNodeId
+    };
+  }
+
+  async detachVpc(
+    nodeId: string,
+    options: NodeVpcActionOptions
+  ): Promise<NodeVpcDetachCommandResult> {
+    const normalizedNodeId = assertNodeId(nodeId);
+    const vpcId = normalizeRequiredNumericId(
+      options.vpcId,
+      'VPC ID',
+      '--vpc-id'
+    );
+    const subnetId = normalizeOptionalNumericId(
+      options.subnetId,
+      'Subnet ID',
+      '--subnet-id'
+    );
+    const privateIp = normalizeOptionalString(
+      options.privateIp,
+      'Private IP',
+      '--private-ip'
+    );
+    const credentials = await this.resolveContext(options);
+    const client = this.dependencies.createVpcClient(credentials);
+    const result = await client.detachNodeVpc({
+      action: 'detach',
+      ...(privateIp === null ? {} : { input_ip: privateIp }),
+      network_id: vpcId,
+      node_id: normalizedNodeId,
+      ...(subnetId === null ? {} : { subnet_id: subnetId })
+    });
+
+    return {
+      action: 'vpc-detach',
+      node_id: normalizedNodeId,
+      result: {
+        message: result.message,
+        project_id: result.project_id ?? null
+      },
+      vpc: {
+        id: vpcId,
+        name: result.vpc_name,
+        private_ip: privateIp,
+        subnet_id: subnetId
+      }
+    };
+  }
+
+  async detachVolume(
+    nodeId: string,
+    options: NodeVolumeActionOptions
+  ): Promise<NodeVolumeDetachCommandResult> {
+    const normalizedNodeId = assertNodeId(nodeId);
+    const volumeId = normalizeRequiredNumericId(
+      options.volumeId,
+      'Volume ID',
+      '--volume-id'
+    );
+    const credentials = await this.resolveContext(options);
+    const nodeClient = this.dependencies.createNodeClient(credentials);
+    const volumeClient = this.dependencies.createVolumeClient(credentials);
+    const nodeVmId = await this.resolveNodeVmId(nodeClient, normalizedNodeId);
+    const result = await volumeClient.detachVolumeFromNode(volumeId, {
+      vm_id: nodeVmId
+    });
+
+    return {
+      action: 'volume-detach',
+      node_id: normalizedNodeId,
+      node_vm_id: nodeVmId,
+      result: {
+        message: result.message
+      },
+      volume: {
+        id: volumeId
+      }
     };
   }
 
@@ -150,19 +513,19 @@ export class NodeService {
     nodeId: string,
     options: NodeContextOptions
   ): Promise<NodeGetCommandResult> {
-    assertNodeId(nodeId);
-    const client = await this.createClient(options);
+    const normalizedNodeId = assertNodeId(nodeId);
+    const client = await this.createNodeClient(options);
 
     return {
       action: 'get',
-      node: await client.getNode(nodeId)
+      node: await client.getNode(String(normalizedNodeId))
     };
   }
 
   async listCatalogOs(
     options: NodeContextOptions
   ): Promise<NodeCatalogOsCommandResult> {
-    const client = await this.createClient(options);
+    const client = await this.createNodeClient(options);
 
     return {
       action: 'catalog-os',
@@ -173,18 +536,26 @@ export class NodeService {
   async listCatalogPlans(
     options: NodeCatalogPlansOptions
   ): Promise<NodeCatalogPlansCommandResult> {
-    const client = await this.createClient(options);
+    const client = await this.createNodeClient(options);
+    const billingType = normalizeNodeCatalogBillingType(options.billingType);
     const query = buildNodeCatalogQuery(options);
+    const items = normalizeNodeCatalogPlanItems(
+      await client.listNodeCatalogPlans(query),
+      billingType
+    );
 
     return {
       action: 'catalog-plans',
-      plans: await client.listNodeCatalogPlans(query),
-      query
+      items,
+      query: {
+        ...query,
+        billing_type: billingType
+      }
     };
   }
 
   async listNodes(options: NodeContextOptions): Promise<NodeListCommandResult> {
-    const client = await this.createClient(options);
+    const client = await this.createNodeClient(options);
     const result = await client.listNodes();
 
     return {
@@ -193,9 +564,70 @@ export class NodeService {
     };
   }
 
-  private async createClient(options: NodeContextOptions): Promise<NodeClient> {
+  async powerOffNode(
+    nodeId: string,
+    options: NodeContextOptions
+  ): Promise<NodePowerOffCommandResult> {
+    const normalizedNodeId = assertNodeId(nodeId);
+    const client = await this.createNodeClient(options);
+    const result = await client.powerOffNode(String(normalizedNodeId));
+
+    return {
+      action: 'power-off',
+      node_id: normalizedNodeId,
+      result: summarizeNodeAction(result)
+    };
+  }
+
+  async powerOnNode(
+    nodeId: string,
+    options: NodeContextOptions
+  ): Promise<NodePowerOnCommandResult> {
+    const normalizedNodeId = assertNodeId(nodeId);
+    const client = await this.createNodeClient(options);
+    const result = await client.powerOnNode(String(normalizedNodeId));
+
+    return {
+      action: 'power-on',
+      node_id: normalizedNodeId,
+      result: summarizeNodeAction(result)
+    };
+  }
+
+  async saveNodeImage(
+    nodeId: string,
+    options: NodeSaveImageOptions
+  ): Promise<NodeSaveImageCommandResult> {
+    const normalizedNodeId = assertNodeId(nodeId);
+    const imageName = normalizeRequiredString(options.name, 'Name', '--name');
+    const client = await this.createNodeClient(options);
+    const result = await client.saveNodeImage(
+      String(normalizedNodeId),
+      imageName
+    );
+
+    return {
+      action: 'save-image',
+      image_name: imageName,
+      node_id: normalizedNodeId,
+      result: summarizeNodeAction(result)
+    };
+  }
+
+  private async createNodeClient(
+    options: NodeContextOptions
+  ): Promise<NodeClient> {
+    return this.dependencies.createNodeClient(
+      await this.resolveContext(options)
+    );
+  }
+
+  private async resolveContext(
+    options: NodeContextOptions
+  ): Promise<ResolvedCredentials> {
     const config = await this.dependencies.store.read();
-    const credentials = resolveCredentials({
+
+    return resolveCredentials({
       ...(options.alias === undefined ? {} : { alias: options.alias }),
       config,
       configPath: this.dependencies.store.configPath,
@@ -210,8 +642,29 @@ export class NodeService {
             location: options.location
           })
     });
+  }
 
-    return this.dependencies.createNodeClient(credentials);
+  private async resolveNodeVmId(
+    nodeClient: NodeClient,
+    nodeId: number
+  ): Promise<number> {
+    const node = await nodeClient.getNode(String(nodeId));
+    const vmId = node.vm_id;
+
+    if (vmId !== undefined && Number.isInteger(vmId) && vmId > 0) {
+      return vmId;
+    }
+
+    throw new CliError(
+      'The MyAccount API did not return a VM ID for this node.',
+      {
+        code: 'INVALID_NODE_DETAILS',
+        details: [`Node ID: ${nodeId}`],
+        exitCode: EXIT_CODES.network,
+        suggestion:
+          'Retry the command. If the problem persists, inspect the node details response.'
+      }
+    );
   }
 }
 
@@ -230,7 +683,7 @@ function assertCanDelete(isInteractive: boolean): void {
   );
 }
 
-function assertNodeId(nodeId: string): void {
+function assertNodeId(nodeId: string): number {
   if (!/^\d+$/.test(nodeId)) {
     throw new CliError('Node ID must be numeric.', {
       code: 'INVALID_NODE_ID',
@@ -238,6 +691,247 @@ function assertNodeId(nodeId: string): void {
       suggestion: 'Pass the numeric node id as the first argument.'
     });
   }
+
+  return Number(nodeId);
+}
+
+function normalizeNodeCatalogBillingType(
+  value: string | undefined
+): NodeCatalogBillingType {
+  return normalizeBillingType(
+    value,
+    ['all', 'committed', 'hourly'],
+    DEFAULT_NODE_CATALOG_BILLING_TYPE
+  );
+}
+
+function normalizeNodeCreateBillingType(
+  value: string | undefined
+): NodeCreateBillingType {
+  return normalizeBillingType(
+    value,
+    ['committed', 'hourly'],
+    DEFAULT_NODE_CREATE_BILLING_TYPE
+  );
+}
+
+function normalizeBillingType<TBillingType extends string>(
+  value: string | undefined,
+  allowedValues: readonly TBillingType[],
+  defaultValue: TBillingType
+): TBillingType {
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  const normalizedValue = value.trim().toLowerCase();
+  if (allowedValues.includes(normalizedValue as TBillingType)) {
+    return normalizedValue as TBillingType;
+  }
+
+  throw new CliError(
+    `Billing type must be one of: ${allowedValues.join(', ')}.`,
+    {
+      code: 'INVALID_BILLING_TYPE',
+      exitCode: EXIT_CODES.usage,
+      suggestion: `Pass --billing-type ${allowedValues.join(' or --billing-type ')}.`
+    }
+  );
+}
+
+function normalizeCommittedPlanId(
+  billingType: NodeCreateBillingType,
+  committedPlanId: string | undefined
+): number | null {
+  if (billingType === 'committed') {
+    if (committedPlanId === undefined) {
+      throw new CliError(
+        'Committed plan ID is required when --billing-type committed is used.',
+        {
+          code: 'MISSING_COMMITTED_PLAN_ID',
+          exitCode: EXIT_CODES.usage,
+          suggestion: `Run ${formatCliCommand('node catalog plans')} first, then pass one plan id with --committed-plan-id.`
+        }
+      );
+    }
+
+    return normalizeRequiredNumericId(
+      committedPlanId,
+      'Committed plan ID',
+      '--committed-plan-id'
+    );
+  }
+
+  if (committedPlanId !== undefined) {
+    throw new CliError(
+      'Committed plan ID can only be used with --billing-type committed.',
+      {
+        code: 'UNEXPECTED_COMMITTED_PLAN_ID',
+        exitCode: EXIT_CODES.usage,
+        suggestion:
+          'Remove --committed-plan-id, or switch to --billing-type committed.'
+      }
+    );
+  }
+
+  return null;
+}
+
+function normalizeNodeCatalogPlanItems(
+  plans: NodeCatalogPlan[],
+  billingType: NodeCatalogBillingType
+): NodeCatalogPlanItem[] {
+  const filteredPlans =
+    billingType === 'committed'
+      ? plans.filter((plan) => hasCommittedOptions(plan))
+      : plans;
+
+  return [...filteredPlans]
+    .sort(compareNodeCatalogPlans)
+    .map((plan, index) => toNodeCatalogPlanItem(plan, billingType, index + 1));
+}
+
+function compareNodeCatalogPlans(
+  left: NodeCatalogPlan,
+  right: NodeCatalogPlan
+): number {
+  return (
+    compareNullableNumber(left.specs?.cpu, right.specs?.cpu) ||
+    compareNullableNumber(
+      parseRamAsNumber(left.specs?.ram),
+      parseRamAsNumber(right.specs?.ram)
+    ) ||
+    compareNullableNumber(left.specs?.disk_space, right.specs?.disk_space) ||
+    compareText(resolveNodeCatalogSku(left), resolveNodeCatalogSku(right)) ||
+    compareText(left.plan, right.plan) ||
+    compareText(left.image, right.image)
+  );
+}
+
+function toNodeCatalogPlanItem(
+  plan: NodeCatalogPlan,
+  billingType: NodeCatalogBillingType,
+  row: number
+): NodeCatalogPlanItem {
+  return {
+    available_inventory: plan.available_inventory_status !== false,
+    committed_options:
+      billingType === 'hourly'
+        ? []
+        : normalizeCommittedOptions(plan.specs?.committed_sku),
+    config: {
+      disk_gb: normalizeOptionalInteger(plan.specs?.disk_space),
+      family: normalizeOptionalText(plan.specs?.family),
+      ram: normalizeOptionalText(plan.specs?.ram),
+      series: normalizeOptionalText(plan.specs?.series),
+      vcpu: normalizeOptionalInteger(plan.specs?.cpu)
+    },
+    currency: normalizeOptionalText(plan.currency),
+    hourly: {
+      minimum_billing_amount: normalizeOptionalNumber(
+        plan.specs?.minimum_billing_amount
+      ),
+      price_per_hour: normalizeOptionalNumber(plan.specs?.price_per_hour),
+      price_per_month: normalizeOptionalNumber(plan.specs?.price_per_month)
+    },
+    image: plan.image,
+    plan: plan.plan,
+    row,
+    sku: resolveNodeCatalogSku(plan)
+  };
+}
+
+function hasCommittedOptions(plan: NodeCatalogPlan): boolean {
+  return normalizeCommittedOptions(plan.specs?.committed_sku).length > 0;
+}
+
+function normalizeCommittedOptions(
+  options: NodeCatalogCommittedSku[] | undefined
+): NodeCatalogCommittedOptionSummary[] {
+  if (options === undefined) {
+    return [];
+  }
+
+  return options
+    .filter(
+      (
+        option
+      ): option is NonNullable<typeof options>[number] & {
+        committed_sku_id: number;
+      } =>
+        typeof option.committed_sku_id === 'number' &&
+        Number.isInteger(option.committed_sku_id) &&
+        option.committed_sku_id > 0
+    )
+    .map((option) => ({
+      days: normalizeOptionalInteger(option.committed_days),
+      id: option.committed_sku_id,
+      name: normalizeOptionalText(option.committed_sku_name) ?? '',
+      total_price: normalizeOptionalNumber(option.committed_sku_price)
+    }))
+    .sort(
+      (left, right) =>
+        compareNullableNumber(left.days, right.days) ||
+        compareNullableNumber(left.total_price, right.total_price) ||
+        left.id - right.id
+    );
+}
+
+function resolveNodeCatalogSku(plan: NodeCatalogPlan): string {
+  return (
+    normalizeOptionalText(plan.specs?.sku_name) ??
+    normalizeOptionalText(plan.name) ??
+    plan.plan
+  );
+}
+
+function normalizeOptionalText(value: string | undefined): string | null {
+  if (value === undefined) {
+    return null;
+  }
+
+  const normalizedValue = value.trim();
+  return normalizedValue.length > 0 ? normalizedValue : null;
+}
+
+function normalizeOptionalInteger(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
+function normalizeOptionalNumber(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function parseRamAsNumber(value: string | undefined): number | null {
+  if (value === undefined) {
+    return null;
+  }
+
+  const parsedValue = Number.parseFloat(value);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
+function compareNullableNumber(
+  left: number | null | undefined,
+  right: number | null | undefined
+): number {
+  if (left == null && right == null) {
+    return 0;
+  }
+
+  if (left == null) {
+    return 1;
+  }
+
+  if (right == null) {
+    return -1;
+  }
+
+  return left - right;
+}
+
+function compareText(left: string, right: string): number {
+  return left.localeCompare(right);
 }
 
 function buildNodeCatalogQuery(
@@ -263,6 +957,71 @@ function buildNodeCatalogQuery(
   };
 }
 
+function normalizeDistinctNumericIds(
+  values: string[],
+  label: string,
+  flag: string
+): number[] {
+  if (values.length === 0) {
+    throw new CliError(`At least one ${label} is required.`, {
+      code: 'MISSING_REQUIRED_VALUE',
+      exitCode: EXIT_CODES.usage,
+      suggestion: `Pass one or more values with ${flag}.`
+    });
+  }
+
+  const seen = new Set<number>();
+  const normalizedValues: number[] = [];
+
+  for (const value of values) {
+    const normalizedValue = normalizeRequiredNumericId(value, label, flag);
+    if (!seen.has(normalizedValue)) {
+      seen.add(normalizedValue);
+      normalizedValues.push(normalizedValue);
+    }
+  }
+
+  return normalizedValues;
+}
+
+function normalizeOptionalNumericId(
+  value: string | undefined,
+  label: string,
+  flag: string
+): number | null {
+  return value === undefined
+    ? null
+    : normalizeRequiredNumericId(value, label, flag);
+}
+
+function normalizeOptionalString(
+  value: string | undefined,
+  label: string,
+  flag: string
+): string | null {
+  return value === undefined
+    ? null
+    : normalizeRequiredString(value, label, flag);
+}
+
+function normalizeRequiredNumericId(
+  value: string,
+  label: string,
+  flag: string
+): number {
+  const normalized = normalizeRequiredString(value, label, flag);
+
+  if (/^\d+$/.test(normalized)) {
+    return Number(normalized);
+  }
+
+  throw new CliError(`${label} must be numeric.`, {
+    code: 'INVALID_NUMERIC_ID',
+    exitCode: EXIT_CODES.usage,
+    suggestion: `Pass the numeric ${label.toLowerCase()} with ${flag}.`
+  });
+}
+
 function normalizeRequiredString(
   value: string,
   label: string,
@@ -278,4 +1037,54 @@ function normalizeRequiredString(
     exitCode: EXIT_CODES.usage,
     suggestion: `Pass a non-empty value with ${flag}.`
   });
+}
+
+function resolveSavedSshKeys(
+  availableKeys: SshKeySummary[],
+  requestedIds: number[]
+): ResolvedSshKey[] {
+  const keyMap = new Map<number, SshKeySummary>();
+
+  for (const key of availableKeys) {
+    keyMap.set(key.pk, key);
+  }
+
+  const missingIds = requestedIds.filter((id) => !keyMap.has(id));
+  if (missingIds.length > 0) {
+    throw new CliError(
+      missingIds.length === 1
+        ? `Unknown SSH key ID: ${missingIds[0]}.`
+        : `Unknown SSH key IDs: ${missingIds.join(', ')}.`,
+      {
+        code: 'SSH_KEY_NOT_FOUND',
+        exitCode: EXIT_CODES.usage,
+        suggestion: `Run ${formatCliCommand('ssh-key list')} to inspect saved SSH key ids, then retry with one or more listed ids.`
+      }
+    );
+  }
+
+  return requestedIds.map((id) => {
+    const key = keyMap.get(id);
+
+    if (key === undefined) {
+      throw new Error(`Expected SSH key ${id} to exist after validation.`);
+    }
+
+    return {
+      id: key.pk,
+      label: key.label,
+      ssh_key: key.ssh_key
+    };
+  });
+}
+
+function summarizeNodeAction(
+  result: NodeActionResult
+): NodeActionStatusSummary {
+  return {
+    action_id: result.id,
+    created_at: result.created_at,
+    image_id: result.image_id ?? null,
+    status: result.status
+  };
 }

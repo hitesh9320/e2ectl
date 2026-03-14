@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { CLI_COMMAND_NAME } from '../../../src/app/metadata.js';
 import { createProgram } from '../../../src/app/program.js';
 import type { CliRuntime } from '../../../src/app/runtime.js';
 import type {
@@ -13,6 +14,9 @@ import {
 } from '../../../src/myaccount/credential-validator.js';
 import { MyAccountApiTransport } from '../../../src/myaccount/index.js';
 import { NodeApiClient } from '../../../src/node/index.js';
+import { SshKeyApiClient } from '../../../src/ssh-key/index.js';
+import { VolumeApiClient } from '../../../src/volume/index.js';
+import { VpcApiClient } from '../../../src/vpc/index.js';
 import { ConfigStore } from '../../../src/config/store.js';
 import { createTestConfigPath, MemoryWriter } from '../../helpers/runtime.js';
 
@@ -60,6 +64,12 @@ describe('config commands', () => {
         confirm,
         createNodeClient: (credentials: ResolvedCredentials) =>
           new NodeApiClient(new MyAccountApiTransport(credentials)),
+        createSshKeyClient: (credentials: ResolvedCredentials) =>
+          new SshKeyApiClient(new MyAccountApiTransport(credentials)),
+        createVolumeClient: (credentials: ResolvedCredentials) =>
+          new VolumeApiClient(new MyAccountApiTransport(credentials)),
+        createVpcClient: (credentials: ResolvedCredentials) =>
+          new VpcApiClient(new MyAccountApiTransport(credentials)),
         credentialValidator: validator,
         isInteractive: true,
         prompt,
@@ -90,7 +100,7 @@ describe('config commands', () => {
 
     await program.parseAsync([
       'node',
-      'e2ectl',
+      CLI_COMMAND_NAME,
       '--json',
       'config',
       'add',
@@ -143,7 +153,7 @@ describe('config commands', () => {
       default_location: 'Delhi'
     });
 
-    await program.parseAsync(['node', 'e2ectl', 'config', 'list']);
+    await program.parseAsync(['node', CLI_COMMAND_NAME, 'config', 'list']);
 
     expect(stdout.buffer).toContain('prod');
     expect(stdout.buffer).toContain('****3456');
@@ -167,7 +177,13 @@ describe('config commands', () => {
       auth_token: 'auth-888888'
     });
 
-    await program.parseAsync(['node', 'e2ectl', '--json', 'config', 'list']);
+    await program.parseAsync([
+      'node',
+      CLI_COMMAND_NAME,
+      '--json',
+      'config',
+      'list'
+    ]);
 
     expect(stdout.buffer).toBe(
       toJsonOutput({
@@ -214,7 +230,7 @@ describe('config commands', () => {
 
     await program.parseAsync([
       'node',
-      'e2ectl',
+      CLI_COMMAND_NAME,
       '--json',
       'config',
       'set-default',
@@ -259,7 +275,7 @@ describe('config commands', () => {
 
     await program.parseAsync([
       'node',
-      'e2ectl',
+      CLI_COMMAND_NAME,
       '--json',
       'config',
       'set-context',
@@ -302,7 +318,7 @@ describe('config commands', () => {
 
     await program.parseAsync([
       'node',
-      'e2ectl',
+      CLI_COMMAND_NAME,
       '--json',
       'config',
       'remove',
@@ -326,7 +342,7 @@ describe('config commands', () => {
     await expect(
       program.parseAsync([
         'node',
-        'e2ectl',
+        CLI_COMMAND_NAME,
         'config',
         'add',
         '--alias',
@@ -349,7 +365,7 @@ describe('config commands', () => {
     await expect(
       program.parseAsync([
         'node',
-        'e2ectl',
+        CLI_COMMAND_NAME,
         'config',
         'add',
         '--alias',
@@ -390,7 +406,7 @@ describe('config commands', () => {
 
     await program.parseAsync([
       'node',
-      'e2ectl',
+      CLI_COMMAND_NAME,
       'config',
       'import',
       '--file',
@@ -442,7 +458,7 @@ describe('config commands', () => {
 
     await program.parseAsync([
       'node',
-      'e2ectl',
+      CLI_COMMAND_NAME,
       '--json',
       'config',
       'import',
@@ -511,7 +527,7 @@ describe('config commands', () => {
 
     await program.parseAsync([
       'node',
-      'e2ectl',
+      CLI_COMMAND_NAME,
       'config',
       'import',
       '--file',
@@ -553,7 +569,7 @@ describe('config commands', () => {
     await expect(
       program.parseAsync([
         'node',
-        'e2ectl',
+        CLI_COMMAND_NAME,
         'config',
         'import',
         '--file',
@@ -603,7 +619,7 @@ describe('config commands', () => {
     await expect(
       program.parseAsync([
         'node',
-        'e2ectl',
+        CLI_COMMAND_NAME,
         'config',
         'import',
         '--file',
