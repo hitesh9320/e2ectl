@@ -1,6 +1,6 @@
-# e2ectl
+# e2ectl-hitesh-test
 
-`e2ectl` is the command-line interface for managing E2E Networks MyAccount resources from the terminal.
+`e2ectl-hitesh-test` is the personal release-sandbox build of `e2ectl`, the command-line interface for managing E2E Networks MyAccount resources from the terminal.
 
 It is designed for operators and automation workflows that need:
 
@@ -17,27 +17,27 @@ It is designed for operators and automation workflows that need:
 
 ## Install
 
-Preferred install once published:
+Preferred install once the personal sandbox package is published:
 
 ```bash
-npm install -g e2ectl
-e2ectl --help
+npm install -g e2ectl-hitesh-test
+e2ectl-hitesh-test --help
 ```
 
 For prereleases:
 
 ```bash
-npm install -g e2ectl@next
-e2ectl --help
+npm install -g e2ectl-hitesh-test@next
+e2ectl-hitesh-test --help
 ```
 
-Until the first public release, install from source:
+Until the personal sandbox package is live, install from source:
 
 ```bash
 npm install
 npm run build
 npm link
-e2ectl --help
+e2ectl-hitesh-test --help
 ```
 
 ## Quickstart
@@ -53,13 +53,13 @@ The normal operator flow is:
 ### 1. Import credentials
 
 ```bash
-e2ectl config import --file ~/Downloads/config.json
+e2ectl-hitesh-test config import --file ~/Downloads/config.json
 ```
 
 For non-interactive setup:
 
 ```bash
-e2ectl config import \
+e2ectl-hitesh-test config import \
   --file ~/Downloads/config.json \
   --default prod \
   --default-project-id <project-id> \
@@ -70,9 +70,9 @@ e2ectl config import \
 ### 2. Review or update saved defaults
 
 ```bash
-e2ectl config list
-e2ectl config set-default --alias prod
-e2ectl config set-context \
+e2ectl-hitesh-test config list
+e2ectl-hitesh-test config set-default --alias prod
+e2ectl-hitesh-test config set-context \
   --alias prod \
   --default-project-id <project-id> \
   --default-location <location>
@@ -81,13 +81,13 @@ e2ectl config set-context \
 ### 3. Discover valid operating system rows
 
 ```bash
-e2ectl node catalog os --alias prod
+e2ectl-hitesh-test node catalog os --alias prod
 ```
 
 ### 4. Discover valid node configs and billing options
 
 ```bash
-e2ectl node catalog plans \
+e2ectl-hitesh-test node catalog plans \
   --alias prod \
   --display-category "Linux Virtual Node" \
   --category Ubuntu \
@@ -107,7 +107,7 @@ This command is config-first:
 Hourly:
 
 ```bash
-e2ectl node create \
+e2ectl-hitesh-test node create \
   --alias prod \
   --name demo-node \
   --plan <exact-plan-from-catalog> \
@@ -117,7 +117,7 @@ e2ectl node create \
 Committed:
 
 ```bash
-e2ectl node create \
+e2ectl-hitesh-test node create \
   --alias prod \
   --name demo-node \
   --plan <exact-plan-from-catalog> \
@@ -129,8 +129,8 @@ e2ectl node create \
 ### 6. Inspect the result
 
 ```bash
-e2ectl node list --alias prod
-e2ectl node get <node-id> --alias prod
+e2ectl-hitesh-test node list --alias prod
+e2ectl-hitesh-test node get <node-id> --alias prod
 ```
 
 If the selected alias already has a saved project id and location, later commands can omit `--project-id` and `--location`.
@@ -142,19 +142,19 @@ If the selected alias already has a saved project id and location, later command
 Inspect and manage nodes:
 
 ```bash
-e2ectl node list
-e2ectl node get <node-id>
-e2ectl node delete <node-id> --force
-e2ectl node action power-on <node-id>
-e2ectl node action save-image <node-id> --name <image-name>
+e2ectl-hitesh-test node list
+e2ectl-hitesh-test node get <node-id>
+e2ectl-hitesh-test node delete <node-id> --force
+e2ectl-hitesh-test node action power-on <node-id>
+e2ectl-hitesh-test node action save-image <node-id> --name <image-name>
 ```
 
 Attach resources to a node:
 
 ```bash
-e2ectl node action vpc attach <node-id> --vpc-id <vpc-id>
-e2ectl node action volume attach <node-id> --volume-id <volume-id>
-e2ectl node action ssh-key attach <node-id> --ssh-key-id <key-id>
+e2ectl-hitesh-test node action vpc attach <node-id> --vpc-id <vpc-id>
+e2ectl-hitesh-test node action volume attach <node-id> --volume-id <volume-id>
+e2ectl-hitesh-test node action ssh-key attach <node-id> --ssh-key-id <key-id>
 ```
 
 ### Volumes
@@ -162,13 +162,13 @@ e2ectl node action ssh-key attach <node-id> --ssh-key-id <key-id>
 Inspect the catalog and create a volume:
 
 ```bash
-e2ectl volume list
-e2ectl volume plans
-e2ectl volume create \
+e2ectl-hitesh-test volume list
+e2ectl-hitesh-test volume plans
+e2ectl-hitesh-test volume create \
   --name data-01 \
   --size 250 \
   --billing-type hourly
-e2ectl volume create \
+e2ectl-hitesh-test volume create \
   --name analytics-data \
   --size 250 \
   --billing-type committed \
@@ -181,13 +181,13 @@ e2ectl volume create \
 Inspect the catalog and create a VPC:
 
 ```bash
-e2ectl vpc list
-e2ectl vpc plans
-e2ectl vpc create \
+e2ectl-hitesh-test vpc list
+e2ectl-hitesh-test vpc plans
+e2ectl-hitesh-test vpc create \
   --name prod-vpc \
   --billing-type hourly \
   --cidr-source e2e
-e2ectl vpc create \
+e2ectl-hitesh-test vpc create \
   --name analytics-vpc \
   --billing-type committed \
   --committed-plan-id 91 \
@@ -201,8 +201,8 @@ e2ectl vpc create \
 List or create saved SSH keys:
 
 ```bash
-e2ectl ssh-key list
-e2ectl ssh-key create \
+e2ectl-hitesh-test ssh-key list
+e2ectl-hitesh-test ssh-key create \
   --label admin-laptop \
   --public-key-file ~/.ssh/id_ed25519.pub
 ```
@@ -230,7 +230,7 @@ Resolution order:
 You can also add a profile manually:
 
 ```bash
-e2ectl config add \
+e2ectl-hitesh-test config add \
   --alias prod \
   --api-key <api-key> \
   --auth-token <bearer-token> \
@@ -256,12 +256,12 @@ e2ectl config add \
 Use built-in help for the full command surface:
 
 ```bash
-e2ectl --help
-e2ectl config --help
-e2ectl node --help
-e2ectl volume --help
-e2ectl vpc --help
-e2ectl ssh-key --help
+e2ectl-hitesh-test --help
+e2ectl-hitesh-test config --help
+e2ectl-hitesh-test node --help
+e2ectl-hitesh-test volume --help
+e2ectl-hitesh-test vpc --help
+e2ectl-hitesh-test ssh-key --help
 ```
 
 For deeper project docs:

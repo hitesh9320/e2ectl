@@ -1,6 +1,6 @@
-# Releasing e2ectl
+# Releasing e2ectl-hitesh-test
 
-This repository is set up for automated GitHub releases and npm publishing.
+This personal sandbox repository is set up for automated GitHub releases and npm publishing.
 
 The intended public launch path is:
 
@@ -39,7 +39,7 @@ The publish workflow derives the npm dist-tag from the git tag:
 
 End-to-end publishing requires all of the following:
 
-1. the unscoped npm package `e2ectl` is owned by a company-controlled npm account
+1. the npm package `e2ectl-hitesh-test` is owned by the personal npm account used for sandbox publishing
 2. npm trusted publishing is configured for this repository and the publish workflow
 3. the repository has a `RELEASE_PLEASE_TOKEN` secret
 
@@ -63,7 +63,7 @@ After that lands on `main`:
 2. review the generated changelog and version bump
 3. merge the release PR
 4. Release Please creates tag `v1.0.0-rc.1` and a GitHub Release
-5. the publish workflow publishes `e2ectl@1.0.0-rc.1` to npm dist-tag `next`
+5. the publish workflow publishes `e2ectl-hitesh-test@1.0.0-rc.1` to npm dist-tag `next`
 
 ## First Stable Release
 
@@ -78,7 +78,7 @@ After that lands on `main`:
 1. Release Please opens a release PR for `1.0.0`
 2. review and merge the release PR
 3. Release Please creates tag `v1.0.0` and a GitHub Release
-4. the publish workflow publishes `e2ectl@1.0.0` to npm dist-tag `latest`
+4. the publish workflow publishes `e2ectl-hitesh-test@1.0.0` to npm dist-tag `latest`
 
 ## Verification Before Promotion
 
@@ -105,8 +105,8 @@ npm pack --dry-run
 
 Before turning the release workflows on for real publishing:
 
-1. create the company-controlled npm user account
-2. claim the unscoped npm package name `e2ectl`
+1. create or prepare the personal npm publishing account
+2. claim the npm package name `e2ectl-hitesh-test`
 3. configure npm trusted publishing for this repo and the publish workflow
 4. add the `RELEASE_PLEASE_TOKEN` repository secret
 5. confirm GitHub Actions can create and approve pull requests if repo settings require it
