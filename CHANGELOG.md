@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0-rc.1](https://github.com/hitesh9320/e2ectl/compare/v1.0.0-rc.1...v1.1.0-rc.1) (2026-03-14)
+
+
+### Features
+
+* add block storage volume commands ([0c7cd5d](https://github.com/hitesh9320/e2ectl/commit/0c7cd5d29e7c985201e425cde3bd8fa8189f8f2e))
+* add block storage volume commands ([7f44758](https://github.com/hitesh9320/e2ectl/commit/7f4475838d5e8f1429029d6d413ab66691d71a9d))
+* add node action commands ([2f981e0](https://github.com/hitesh9320/e2ectl/commit/2f981e0033ce5b48d9cb6b66b1d6af98afed4b32))
+* add node action commands ([018812a](https://github.com/hitesh9320/e2ectl/commit/018812a523158a69ccb1f03731f046d588720c85))
+* add node billing discovery and committed create ([242fbef](https://github.com/hitesh9320/e2ectl/commit/242fbef6c601f9b8cb2adfc62b474c77a01ba2da))
+* add node billing discovery and committed create ([1f55bb9](https://github.com/hitesh9320/e2ectl/commit/1f55bb98aa2693dc0b963321820f9a11e6e24659))
+* add vpc and ssh key commands ([07e1fe1](https://github.com/hitesh9320/e2ectl/commit/07e1fe11f8cac778095d63eb4efc5af48d047e70))
+* add vpc and ssh key commands ([8a72a8e](https://github.com/hitesh9320/e2ectl/commit/8a72a8e94b1ab4b4e49c643a2409988f00b75079))
+
+
+### Bug Fixes
+
+* unblock release flow gates ([1aca156](https://github.com/hitesh9320/e2ectl/commit/1aca15624677d2b56df5746470ef2db41b3f66a4))
+* unblock release flow gates ([a5053c6](https://github.com/hitesh9320/e2ectl/commit/a5053c60fe03caf2d922fa01fccc60ad6d2a6403))
+* validate node billing flags before auth ([195c454](https://github.com/hitesh9320/e2ectl/commit/195c454da84a03a2c3f2c6a31610425311147b93))
+
 ## [1.0.0-rc.1](https://github.com/hitesh9320/e2ectl/compare/v0.1.0...v1.0.0-rc.1) (2026-03-13)
 
 
