@@ -1,6 +1,6 @@
 {
   "name": "e2ectl-hitesh-test",
-  "version": "1.0.0-rc.1",
+  "version": "1.1.0-rc.1",
   "description": "OSS CLI for E2E Networks MyAccount.",
   "homepage": "https://github.com/hitesh9320/e2ectl#readme",
   "bugs": {
