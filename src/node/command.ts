@@ -529,7 +529,7 @@ function buildNodeCatalogCommand(
     )
     .option(
       '--family <family>',
-      'Optional family label returned by the catalog, for example "General Purpose".'
+      'Optional family label returned by the catalog, for example "CPU Intensive 3rd Generation".'
     )
     .option('--alias <alias>', 'Saved profile alias to use for this command.')
     .option(
