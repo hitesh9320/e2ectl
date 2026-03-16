@@ -1,6 +1,6 @@
-# e2ectl
+# hitesh-test
 
-`e2ectl` is the command-line interface for managing E2E Networks MyAccount resources from the terminal.
+`hitesh-test` is a personal release-rehearsal build of the `e2ectl` command-line interface for managing E2E Networks MyAccount resources from the terminal.
 
 It is built for operators and automation that need:
 
@@ -17,15 +17,15 @@ It is built for operators and automation that need:
 ## Install
 
 ```bash
-npm install -g e2ectl
-e2ectl --help
+npm install -g hitesh-test
+hitesh-test --help
 ```
 
 If you want prerelease builds, install the `next` dist-tag instead:
 
 ```bash
-npm install -g e2ectl@next
-e2ectl --help
+npm install -g hitesh-test@next
+hitesh-test --help
 ```
 
 ## Quickstart
@@ -33,7 +33,7 @@ e2ectl --help
 ### 1. Import credentials and save a default profile
 
 ```bash
-e2ectl config import \
+hitesh-test config import \
   --file ~/Downloads/config.json \
   --default <profile-alias> \
   --default-project-id <project-id> \
@@ -46,19 +46,19 @@ e2ectl config import \
 ### 2. Confirm the saved profile and defaults
 
 ```bash
-e2ectl config list
+hitesh-test config list
 ```
 
 ### 3. Discover valid operating system rows
 
 ```bash
-e2ectl node catalog os --alias <profile-alias>
+hitesh-test node catalog os --alias <profile-alias>
 ```
 
 ### 4. Discover exact plan, image, and billing values
 
 ```bash
-e2ectl node catalog plans \
+hitesh-test node catalog plans \
   --alias <profile-alias> \
   --display-category "Linux Virtual Node" \
   --category Ubuntu \
@@ -72,14 +72,14 @@ Use the returned `plan`, `image`, and optional committed plan id exactly as show
 ### 5. Create and inspect a node
 
 ```bash
-e2ectl node create \
+hitesh-test node create \
   --alias <profile-alias> \
   --name <node-name> \
   --plan <plan> \
   --image <image>
 
-e2ectl node list --alias <profile-alias>
-e2ectl node get <node-id> --alias <profile-alias>
+hitesh-test node list --alias <profile-alias>
+hitesh-test node get <node-id> --alias <profile-alias>
 ```
 
 For committed billing, add `--billing-type committed --committed-plan-id <committed-plan-id>` using values returned by `node catalog plans`.
@@ -91,48 +91,48 @@ If the selected profile already has a saved project id and location, later comma
 ### Nodes
 
 ```bash
-e2ectl node list --alias <profile-alias>
-e2ectl node get <node-id> --alias <profile-alias>
-e2ectl node action power-off <node-id> --alias <profile-alias>
-e2ectl node action power-on <node-id> --alias <profile-alias>
-e2ectl node action save-image <node-id> --name <image-name> --alias <profile-alias>
-e2ectl node action vpc attach <node-id> --vpc-id <vpc-id> --alias <profile-alias>
-e2ectl node action volume attach <node-id> --volume-id <volume-id> --alias <profile-alias>
-e2ectl node action ssh-key attach <node-id> --ssh-key-id <ssh-key-id> --alias <profile-alias>
-e2ectl node delete <node-id> --alias <profile-alias>
+hitesh-test node list --alias <profile-alias>
+hitesh-test node get <node-id> --alias <profile-alias>
+hitesh-test node action power-off <node-id> --alias <profile-alias>
+hitesh-test node action power-on <node-id> --alias <profile-alias>
+hitesh-test node action save-image <node-id> --name <image-name> --alias <profile-alias>
+hitesh-test node action vpc attach <node-id> --vpc-id <vpc-id> --alias <profile-alias>
+hitesh-test node action volume attach <node-id> --volume-id <volume-id> --alias <profile-alias>
+hitesh-test node action ssh-key attach <node-id> --ssh-key-id <ssh-key-id> --alias <profile-alias>
+hitesh-test node delete <node-id> --alias <profile-alias>
 ```
 
 ### Volumes
 
 ```bash
-e2ectl volume plans --alias <profile-alias>
-e2ectl volume create \
+hitesh-test volume plans --alias <profile-alias>
+hitesh-test volume create \
   --name <volume-name> \
   --size <size-gb> \
   --billing-type hourly \
   --alias <profile-alias>
-e2ectl volume create \
+hitesh-test volume create \
   --name <volume-name> \
   --size <size-gb> \
   --billing-type committed \
   --committed-plan-id <committed-plan-id> \
   --post-commit-behavior auto-renew \
   --alias <profile-alias>
-e2ectl volume list --alias <profile-alias>
+hitesh-test volume list --alias <profile-alias>
 ```
 
-If you already know the target size, use `e2ectl volume plans --size <size-gb> --alias <profile-alias>` to inspect exact committed options first.
+If you already know the target size, use `hitesh-test volume plans --size <size-gb> --alias <profile-alias>` to inspect exact committed options first.
 
 ### VPCs
 
 ```bash
-e2ectl vpc plans --alias <profile-alias>
-e2ectl vpc create \
+hitesh-test vpc plans --alias <profile-alias>
+hitesh-test vpc create \
   --name <vpc-name> \
   --billing-type hourly \
   --cidr-source e2e \
   --alias <profile-alias>
-e2ectl vpc create \
+hitesh-test vpc create \
   --name <vpc-name> \
   --billing-type committed \
   --committed-plan-id <committed-plan-id> \
@@ -140,18 +140,18 @@ e2ectl vpc create \
   --cidr-source custom \
   --cidr <custom-cidr> \
   --alias <profile-alias>
-e2ectl vpc list --alias <profile-alias>
+hitesh-test vpc list --alias <profile-alias>
 ```
 
 ### SSH Keys
 
 ```bash
-e2ectl ssh-key list --alias <profile-alias>
-e2ectl ssh-key create \
+hitesh-test ssh-key list --alias <profile-alias>
+hitesh-test ssh-key create \
   --label <key-label> \
   --public-key-file ~/.ssh/id_ed25519.pub \
   --alias <profile-alias>
-cat ~/.ssh/id_ed25519.pub | e2ectl ssh-key create \
+cat ~/.ssh/id_ed25519.pub | hitesh-test ssh-key create \
   --label <key-label> \
   --public-key-file - \
   --alias <profile-alias>
@@ -184,7 +184,7 @@ Project context precedence:
 If you prefer to add a profile manually:
 
 ```bash
-e2ectl config add \
+hitesh-test config add \
   --alias <profile-alias> \
   --api-key <api-key> \
   --auth-token <auth-token> \
@@ -208,13 +208,13 @@ e2ectl config add \
 ## More Help
 
 ```bash
-e2ectl --help
-e2ectl config --help
-e2ectl node --help
-e2ectl node catalog plans --help
-e2ectl volume --help
-e2ectl vpc --help
-e2ectl ssh-key --help
+hitesh-test --help
+hitesh-test config --help
+hitesh-test node --help
+hitesh-test node catalog plans --help
+hitesh-test volume --help
+hitesh-test vpc --help
+hitesh-test ssh-key --help
 ```
 
 Contributor and maintainer docs live in [CONTRIBUTING.md](./CONTRIBUTING.md), [docs/MAINTAINING.md](./docs/MAINTAINING.md), and [docs/RELEASING.md](./docs/RELEASING.md).

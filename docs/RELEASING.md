@@ -1,6 +1,6 @@
-# Releasing e2ectl
+# Releasing hitesh-test
 
-This is the steady-state release runbook for `e2ectl`.
+This is the steady-state release runbook for the personal `hitesh-test` release rehearsal.
 
 For CI ownership and promotion readiness, use [docs/MAINTAINING.md](./MAINTAINING.md). For day-to-day contributor workflow, use [CONTRIBUTING.md](../CONTRIBUTING.md).
 
@@ -8,7 +8,7 @@ For CI ownership and promotion readiness, use [docs/MAINTAINING.md](./MAINTAININ
 
 Before running the release flow, confirm the repository is already set up for automated publishing:
 
-- the npm package name `e2ectl` is owned by a company-controlled npm account
+- the npm package name `hitesh-test` is owned by your personal npm account
 - npm trusted publishing is configured for this repository
 - `RELEASE_PLEASE_TOKEN` is configured so Release Please tags and GitHub Releases trigger downstream publish workflows reliably
 - maintainers can merge to `main` and approve release PRs under the current repository rules
@@ -97,6 +97,6 @@ After publish completes:
 
 These are one-time setup tasks, not part of the normal release path:
 
-- claim the unscoped npm package name `e2ectl`
+- claim the unscoped npm package name `hitesh-test`
 - configure npm trusted publishing for this repository
 - add the `RELEASE_PLEASE_TOKEN` repository secret
