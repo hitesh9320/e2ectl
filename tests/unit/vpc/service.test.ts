@@ -573,14 +573,15 @@ describe('VpcService.listVpcs — concurrency', () => {
     );
 
     for (const [i, result] of results.entries()) {
+      const fixture = fixtures[i]!;
       expect(result.action).toBe('list');
       expect(result.items).toHaveLength(1);
       expect(result.items[0]).toMatchObject({
-        name: fixtures[i].expectedName,
-        network_id: fixtures[i].expectedNetworkId
+        name: fixture.expectedName,
+        network_id: fixture.expectedNetworkId
       });
       // Each underlying client was called exactly once.
-      expect(fixtures[i].listVpcs).toHaveBeenCalledTimes(1);
+      expect(fixture.listVpcs).toHaveBeenCalledTimes(1);
     }
   });
 });

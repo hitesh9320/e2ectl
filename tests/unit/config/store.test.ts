@@ -343,7 +343,7 @@ describe('ConfigStore – atomic write guarantees', () => {
 
       // The final file must be syntactically valid JSON.
       const raw = await readFile(configPath, 'utf8');
-      expect(() => JSON.parse(raw)).not.toThrow();
+      expect(() => JSON.parse(raw) as unknown).not.toThrow();
 
       // The final file must have the correct permissions.
       const fileStats = await stat(configPath);
