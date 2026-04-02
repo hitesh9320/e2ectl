@@ -44,6 +44,17 @@ jobs:
           registry-url: https://npm.pkg.github.com
           scope: "@e2enetworks-oss"
 
+      - name: Validate release tag
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9] ]]; then
+            echo "::error::RELEASE_TAG '$RELEASE_TAG' does not look like a version tag (expected v*.*.*)" >&2
+            exit 1
+          fi
+          if ! git tag --list | grep -qxF "$RELEASE_TAG"; then
+            echo "::error::Tag '$RELEASE_TAG' does not exist in this repository." >&2
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm ci
 

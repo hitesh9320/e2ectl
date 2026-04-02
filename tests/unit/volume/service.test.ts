@@ -599,3 +599,225 @@ describe('VolumeService', () => {
     });
   });
 });
+
+describe('VolumeService.listVolumes — pagination', () => {
+  it('returns all items from a single-page response', async () => {
+    const { listVolumes, service } = createServiceFixture();
+
+    listVolumes.mockResolvedValueOnce({
+      items: [
+        {
+          block_id: 1,
+          name: 'vol-a',
+          size_string: '100 GB',
+          status: 'Available',
+          vm_detail: {}
+        }
+      ],
+      total_count: 1,
+      total_page_number: 1
+    });
+
+    const result = await service.listVolumes({ alias: 'prod' });
+
+    expect(listVolumes).toHaveBeenCalledTimes(1);
+    expect(listVolumes).toHaveBeenCalledWith(1, 100);
+    expect(result).toEqual({
+      action: 'list',
+      items: [
+        {
+          attached: false,
+          attachment: null,
+          id: 1,
+          name: 'vol-a',
+          size_gb: 100,
+          size_label: '100 GB',
+          status: 'Available'
+        }
+      ],
+      total_count: 1,
+      total_page_number: 1
+    });
+  });
+
+  it('fetches exactly two pages and collects all items in order', async () => {
+    const { listVolumes, service } = createServiceFixture();
+
+    listVolumes
+      .mockResolvedValueOnce({
+        items: [
+          {
+            block_id: 10,
+            name: 'vol-first',
+            size_string: '200 GB',
+            status: 'Available',
+            vm_detail: {}
+          }
+        ],
+        total_count: 2,
+        total_page_number: 2
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            block_id: 20,
+            name: 'vol-second',
+            size_string: '400 GB',
+            status: 'Attached',
+            vm_detail: {
+              node_id: 5,
+              vm_id: 9001,
+              vm_name: 'worker-1'
+            }
+          }
+        ],
+        total_count: 2,
+        total_page_number: 2
+      });
+
+    const result = await service.listVolumes({ alias: 'prod' });
+
+    expect(listVolumes).toHaveBeenCalledTimes(2);
+    expect(listVolumes).toHaveBeenNthCalledWith(1, 1, 100);
+    expect(listVolumes).toHaveBeenNthCalledWith(2, 2, 100);
+    expect(result).toEqual({
+      action: 'list',
+      items: [
+        {
+          attached: false,
+          attachment: null,
+          id: 10,
+          name: 'vol-first',
+          size_gb: 200,
+          size_label: '200 GB',
+          status: 'Available'
+        },
+        {
+          attached: true,
+          attachment: {
+            node_id: 5,
+            vm_id: 9001,
+            vm_name: 'worker-1'
+          },
+          id: 20,
+          name: 'vol-second',
+          size_gb: 400,
+          size_label: '400 GB',
+          status: 'Attached'
+        }
+      ],
+      total_count: 2,
+      total_page_number: 2
+    });
+  });
+
+  it('exits after one fetch when total_page_number is 0 (treated as 1)', async () => {
+    const { listVolumes, service } = createServiceFixture();
+
+    listVolumes.mockResolvedValueOnce({
+      items: [
+        {
+          block_id: 7,
+          name: 'vol-zero-pages',
+          size_string: '50 GB',
+          status: 'Available',
+          vm_detail: {}
+        }
+      ],
+      total_count: 1,
+      total_page_number: 0
+    });
+
+    const result = await service.listVolumes({ alias: 'prod' });
+
+    expect(listVolumes).toHaveBeenCalledTimes(1);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ id: 7, name: 'vol-zero-pages' });
+  });
+
+  it('exits after one fetch when total_page_number is undefined (treated as 1)', async () => {
+    const { listVolumes, service } = createServiceFixture();
+
+    listVolumes.mockResolvedValueOnce({
+      items: [
+        {
+          block_id: 3,
+          name: 'vol-no-meta',
+          size_string: '75 GB',
+          status: 'Available',
+          vm_detail: {}
+        }
+      ],
+      total_count: 1,
+      total_page_number: undefined
+    });
+
+    const result = await service.listVolumes({ alias: 'prod' });
+
+    expect(listVolumes).toHaveBeenCalledTimes(1);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ id: 3, name: 'vol-no-meta' });
+  });
+
+  it('throws PAGINATION_LIMIT_EXCEEDED before making more than 500 requests when API always reports 999 pages', async () => {
+    const { listVolumes, service } = createServiceFixture();
+
+    listVolumes.mockResolvedValue({
+      items: [
+        {
+          block_id: 99,
+          name: 'vol-runaway',
+          size_string: '10 GB',
+          status: 'Available',
+          vm_detail: {}
+        }
+      ],
+      total_count: 99900,
+      total_page_number: 999
+    });
+
+    await expect(
+      service.listVolumes({ alias: 'prod' })
+    ).rejects.toMatchObject({
+      code: 'PAGINATION_LIMIT_EXCEEDED'
+    });
+
+    expect(listVolumes.mock.calls.length).toBeLessThanOrEqual(500);
+  });
+
+  it('resolves all five concurrent listVolumes calls independently without shared state corruption', async () => {
+    const fixtures = Array.from({ length: 5 }, (_, index) => {
+      const fixture = createServiceFixture();
+      fixture.listVolumes.mockResolvedValueOnce({
+        items: [
+          {
+            block_id: 100 + index,
+            name: `vol-concurrent-${index}`,
+            size_string: '100 GB',
+            status: 'Available',
+            vm_detail: {}
+          }
+        ],
+        total_count: 1,
+        total_page_number: 1
+      });
+      return fixture;
+    });
+
+    const results = await Promise.all(
+      fixtures.map((fixture) => fixture.service.listVolumes({ alias: 'prod' }))
+    );
+
+    expect(results).toHaveLength(5);
+
+    for (let index = 0; index < 5; index++) {
+      expect(results[index]).toMatchObject({ action: 'list' });
+      expect(results[index]!.items).toHaveLength(1);
+      expect(results[index]!.items[0]).toMatchObject({
+        id: 100 + index,
+        name: `vol-concurrent-${index}`
+      });
+      expect(fixtures[index]!.listVolumes).toHaveBeenCalledTimes(1);
+    }
+  });
+});

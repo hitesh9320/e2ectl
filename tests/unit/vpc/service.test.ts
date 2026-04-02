@@ -346,3 +346,230 @@ describe('VpcService', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// listVpcs pagination — happy paths
+// ---------------------------------------------------------------------------
+
+describe('VpcService.listVpcs — happy path', () => {
+  it('returns items from a single page when total_page_number is 1', async () => {
+    const { listVpcs, service } = createServiceFixture();
+
+    listVpcs.mockResolvedValueOnce({
+      items: [
+        {
+          created_at: '2026-03-13T09:00:00Z',
+          ipv4_cidr: '10.10.0.0/23',
+          is_e2e_vpc: false,
+          name: 'vpc-a',
+          network_id: 101,
+          state: 'Active',
+          subnets: []
+        }
+      ],
+      total_count: 1,
+      total_page_number: 1
+    });
+
+    const result = await service.listVpcs({ alias: 'prod' });
+
+    expect(listVpcs).toHaveBeenCalledTimes(1);
+    expect(listVpcs).toHaveBeenCalledWith(1, 100);
+    expect(result.action).toBe('list');
+    expect(result.total_count).toBe(1);
+    expect(result.total_page_number).toBe(1);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ name: 'vpc-a', network_id: 101 });
+  });
+
+  it('concatenates items across two pages in order', async () => {
+    const { listVpcs, service } = createServiceFixture();
+
+    listVpcs
+      .mockResolvedValueOnce({
+        items: [
+          {
+            created_at: '2026-03-13T09:00:00Z',
+            ipv4_cidr: '10.10.0.0/23',
+            is_e2e_vpc: false,
+            name: 'vpc-page1',
+            network_id: 201,
+            state: 'Active',
+            subnets: []
+          }
+        ],
+        total_count: 2,
+        total_page_number: 2
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            created_at: '2026-03-13T10:00:00Z',
+            ipv4_cidr: '10.20.0.0/23',
+            is_e2e_vpc: true,
+            name: 'vpc-page2',
+            network_id: 202,
+            state: 'Creating',
+            subnets: []
+          }
+        ],
+        total_count: 2,
+        total_page_number: 2
+      });
+
+    const result = await service.listVpcs({ alias: 'prod' });
+
+    expect(listVpcs).toHaveBeenCalledTimes(2);
+    expect(listVpcs).toHaveBeenNthCalledWith(1, 1, 100);
+    expect(listVpcs).toHaveBeenNthCalledWith(2, 2, 100);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({ name: 'vpc-page1', network_id: 201 });
+    expect(result.items[1]).toMatchObject({ name: 'vpc-page2', network_id: 202 });
+    expect(result.total_count).toBe(2);
+    expect(result.total_page_number).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listVpcs pagination — edge cases
+// ---------------------------------------------------------------------------
+
+describe('VpcService.listVpcs — edge cases', () => {
+  it('treats total_page_number: 0 as 1 and fetches exactly one page', async () => {
+    const { listVpcs, service } = createServiceFixture();
+
+    listVpcs.mockResolvedValueOnce({
+      items: [
+        {
+          created_at: null,
+          ipv4_cidr: '192.168.1.0/24',
+          is_e2e_vpc: false,
+          name: 'vpc-zero-pages',
+          network_id: 301,
+          state: 'Active',
+          subnets: []
+        }
+      ],
+      total_count: 1,
+      total_page_number: 0
+    });
+
+    const result = await service.listVpcs({ alias: 'prod' });
+
+    // The service normalises 0 → 1 via `?? 1` so the loop exits after page 1.
+    expect(listVpcs).toHaveBeenCalledTimes(1);
+    expect(result.items).toHaveLength(1);
+    // The normalised value is stored as-returned from the API response field.
+    expect(result.total_page_number).toBe(0);
+  });
+
+  it('treats total_page_number: undefined as 1 and fetches exactly one page', async () => {
+    const { listVpcs, service } = createServiceFixture();
+
+    listVpcs.mockResolvedValueOnce({
+      items: [
+        {
+          created_at: null,
+          ipv4_cidr: '172.16.0.0/24',
+          is_e2e_vpc: false,
+          name: 'vpc-no-pages-field',
+          network_id: 302,
+          state: 'Active',
+          subnets: []
+        }
+      ],
+      total_count: 1,
+      total_page_number: undefined
+    });
+
+    const result = await service.listVpcs({ alias: 'prod' });
+
+    expect(listVpcs).toHaveBeenCalledTimes(1);
+    expect(result.items).toHaveLength(1);
+    // undefined is normalised to 1 internally; the stored value reflects that.
+    expect(result.total_page_number).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listVpcs pagination — guard (VPC_LIST_MAX_PAGES = 500)
+// ---------------------------------------------------------------------------
+
+describe('VpcService.listVpcs — pagination guard', () => {
+  it('throws CliError with PAGINATION_LIMIT_EXCEEDED when total_page_number exceeds 500', async () => {
+    const { listVpcs, service } = createServiceFixture();
+
+    // Every page response claims there are 999 pages, so the loop will never
+    // satisfy the exit condition on its own. The guard must fire first.
+    listVpcs.mockResolvedValue({
+      items: [
+        {
+          created_at: null,
+          ipv4_cidr: '10.0.0.0/24',
+          is_e2e_vpc: false,
+          name: 'vpc-infinite',
+          network_id: 999,
+          state: 'Active',
+          subnets: []
+        }
+      ],
+      total_count: 99900,
+      total_page_number: 999
+    });
+
+    await expect(service.listVpcs({ alias: 'prod' })).rejects.toMatchObject({
+      code: 'PAGINATION_LIMIT_EXCEEDED',
+      name: 'CliError'
+    });
+
+    // Must not have fetched more than 500 pages.
+    expect(listVpcs.mock.calls.length).toBeLessThanOrEqual(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listVpcs — concurrency / shared-state isolation
+// ---------------------------------------------------------------------------
+
+describe('VpcService.listVpcs — concurrency', () => {
+  it('resolves 5 parallel calls independently without shared-state corruption', async () => {
+    // Each parallel call gets its own service + client fixture so there is no
+    // shared mock state between invocations.
+    const fixtures = Array.from({ length: 5 }, (_, i) => {
+      const { listVpcs, service } = createServiceFixture();
+
+      listVpcs.mockResolvedValueOnce({
+        items: [
+          {
+            created_at: null,
+            ipv4_cidr: `10.${i}.0.0/24`,
+            is_e2e_vpc: false,
+            name: `vpc-concurrent-${i}`,
+            network_id: 500 + i,
+            state: 'Active',
+            subnets: []
+          }
+        ],
+        total_count: 1,
+        total_page_number: 1
+      });
+
+      return { expectedNetworkId: 500 + i, expectedName: `vpc-concurrent-${i}`, listVpcs, service };
+    });
+
+    const results = await Promise.all(
+      fixtures.map(({ service }) => service.listVpcs({ alias: 'prod' }))
+    );
+
+    for (const [i, result] of results.entries()) {
+      expect(result.action).toBe('list');
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]).toMatchObject({
+        name: fixtures[i].expectedName,
+        network_id: fixtures[i].expectedNetworkId
+      });
+      // Each underlying client was called exactly once.
+      expect(fixtures[i].listVpcs).toHaveBeenCalledTimes(1);
+    }
+  });
+});

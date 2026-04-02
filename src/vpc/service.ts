@@ -16,6 +16,7 @@ import type {
 } from './types.js';
 
 const VPC_LIST_PAGE_SIZE = 100;
+const VPC_LIST_MAX_PAGES = 500;
 
 export type VpcBillingType = 'committed' | 'hourly';
 export type VpcCidrSource = 'custom' | 'e2e';
@@ -353,6 +354,18 @@ export class VpcService {
       totalCount = page.total_count ?? items.length;
       totalPageNumber = page.total_page_number ?? 1;
       currentPage += 1;
+
+      if (currentPage > VPC_LIST_MAX_PAGES) {
+        throw new CliError(
+          `VPC list exceeded the maximum page limit (${VPC_LIST_MAX_PAGES}).`,
+          {
+            code: 'PAGINATION_LIMIT_EXCEEDED',
+            exitCode: EXIT_CODES.network,
+            suggestion:
+              'The API returned an unexpectedly large result set. Retry the command or contact support.'
+          }
+        );
+      }
     } while (currentPage <= totalPageNumber);
 
     return {

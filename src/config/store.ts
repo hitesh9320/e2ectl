@@ -260,10 +260,15 @@ async function writeSecureConfigFile(
       flag: 'wx',
       mode: CONFIG_FILE_MODE
     });
+    // chmod before rename: rename(2) preserves file mode on POSIX, so this
+    // single chmod is sufficient. A second chmod after rename would create a
+    // TOCTOU window and would leave the file stranded if it threw on NFS.
     await chmod(tempPath, CONFIG_FILE_MODE);
     await rename(tempPath, configPath);
-    await chmod(configPath, CONFIG_FILE_MODE);
   } finally {
+    // Force-remove the temp file in case writeFile or chmod failed before
+    // rename. After a successful rename tempPath no longer exists, so this
+    // is a safe no-op (force: true suppresses ENOENT).
     await rm(tempPath, { force: true });
   }
 }
