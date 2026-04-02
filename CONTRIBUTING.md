@@ -173,6 +173,50 @@ After the tag lands, CI runs automatically:
 
 Use the `publish` workflow's manual dispatch input `release_tag` to rerun for an existing tag without pushing a new one.
 
+### Testing a Publish Without Merging
+
+You can smoke-test the full publish pipeline from a PR branch without touching `latest`.
+
+**Step 1 — push a pre-release tag from your branch**
+
+```bash
+# Replace x.y.z with the next planned version
+git tag vx.y.z-rc.1
+git push origin vx.y.z-rc.1
+```
+
+The `-rc.1` suffix makes `publish.yml` use dist-tag `next`, so the stable
+`npm install @e2enetworks-oss/e2ectl` is unaffected.
+
+**Step 2 — watch the workflow**
+
+Go to **Actions → publish** on GitHub and confirm the run completes green.
+
+**Step 3 — verify the package**
+
+```bash
+# Confirm the next dist-tag was updated
+npm view @e2enetworks-oss/e2ectl dist-tags
+# → { latest: '...', next: 'x.y.z-rc.1' }
+
+# Install and smoke-test
+npm install -g @e2enetworks-oss/e2ectl@next
+e2ectl --version
+```
+
+A pre-release GitHub Release is created automatically alongside the publish.
+
+**Step 4 — ship the stable release**
+
+Once the PR is merged and `main` is ready:
+
+```bash
+git tag vx.y.z
+git push origin vx.y.z
+```
+
+This publishes under `latest` and creates the stable GitHub Release.
+
 ### After Publish
 
 - Verify the GitHub Release and tag exist
