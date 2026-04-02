@@ -52,7 +52,15 @@ export function normalizeRequiredNumericId(
   const normalized = normalizeRequiredString(value, label, flag);
 
   if (/^\d+$/.test(normalized)) {
-    return Number(normalized);
+    const parsed = Number(normalized);
+    if (parsed > Number.MAX_SAFE_INTEGER) {
+      throw new CliError(`${label} is too large to represent safely.`, {
+        code: 'INVALID_NUMERIC_ID',
+        exitCode: EXIT_CODES.usage,
+        suggestion: `Pass a valid numeric ${label.toLowerCase()} with ${flag}.`
+      });
+    }
+    return parsed;
   }
 
   throw new CliError(`${label} must be numeric.`, {

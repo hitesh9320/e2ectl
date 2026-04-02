@@ -15,6 +15,7 @@ import type {
 } from './types.js';
 
 const VOLUME_LIST_PAGE_SIZE = 100;
+const VOLUME_LIST_MAX_PAGES = 500;
 const FRONTEND_BILLING_MONTH_HOURS = 730;
 
 export type VolumeBillingType = 'committed' | 'hourly';
@@ -419,6 +420,18 @@ export class VolumeService {
       totalCount = page.total_count ?? items.length;
       totalPageNumber = page.total_page_number ?? 1;
       currentPage += 1;
+
+      if (currentPage > VOLUME_LIST_MAX_PAGES) {
+        throw new CliError(
+          `Volume list exceeded the maximum page limit (${VOLUME_LIST_MAX_PAGES}).`,
+          {
+            code: 'PAGINATION_LIMIT_EXCEEDED',
+            exitCode: EXIT_CODES.network,
+            suggestion:
+              'The API returned an unexpectedly large result set. Retry the command or contact support.'
+          }
+        );
+      }
     } while (currentPage <= totalPageNumber);
 
     return {
