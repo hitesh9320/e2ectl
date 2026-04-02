@@ -229,6 +229,5 @@ e2ectl ssh-key --help
 
 ## Documentation
 
-- [Contributing](./CONTRIBUTING.md) — development setup, conventions, and PR process
+- [Contributing](./CONTRIBUTING.md) — development setup, conventions, releasing, and PR process
 - [Maintaining](./docs/MAINTAINING.md) — triage, review, and merge guidelines
-- [Releasing](./docs/RELEASING.md) — how to cut a release and publish to GitHub Packages
